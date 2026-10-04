@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from typing import Annotated
 
@@ -9,6 +10,7 @@ from fastapi import Depends, HTTPException, Request, status
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
+from starlette.requests import HTTPConnection
 
 from app.config import settings
 from app.core.database import get_db
@@ -18,12 +20,31 @@ from app.models.user import User
 
 def _rate_key(request: Request) -> str:
     token = request.cookies.get(settings.COOKIE_NAME) or request.headers.get("authorization", "")
-    return f"{get_remote_address(request)}:{hash(token) if token else ''}"
+    # A stable digest, not hash() (randomized per process), so every API worker shares the client's bucket.
+    return f"{get_remote_address(request)}:{hashlib.sha256(token.encode()).hexdigest()[:16] if token else ''}"
 
 
 limiter = Limiter(key_func=_rate_key, default_limits=[settings.RATE_LIMIT_DEFAULT],
                   storage_uri=settings.REDIS_URL if settings.REDIS_URL and not settings.is_sqlite else "memory://",
                   enabled=settings.ENVIRONMENT != "test")
+
+
+def default_rate_limit(request: HTTPConnection) -> None:
+    """Apply RATE_LIMIT_DEFAULT once the route is known (an app-wide dependency).
+
+    SlowAPIMiddleware finds a request's route by scanning ``app.routes``. On recent FastAPI that list holds
+    one entry per included router, so the middleware never sees the /api/v1 routes and lets them through.
+    Requests the middleware did count (the app's own routes; every route on older FastAPI) are not counted
+    twice, and routes with their own ``@limiter.limit`` keep just that limit.
+    """
+    if request.scope["type"] != "http" or hasattr(request.state, "view_rate_limit"):
+        return
+    active: Limiter = request.app.state.limiter  # the limiter SlowAPIMiddleware uses (``limiter`` above)
+    endpoint = request.scope.get("endpoint")
+    if endpoint is None or f"{endpoint.__module__}.{endpoint.__name__}" in active._route_limits:
+        return
+    active._check_request_limit(request, endpoint, True)
+
 
 DB = Annotated[Session, Depends(get_db)]
 

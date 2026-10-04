@@ -7,7 +7,7 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
@@ -15,7 +15,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy import text
 
 from app.api import agent, analytics, applications, auth, communications, files, interviews, jobs, resumes, review, users
-from app.api.deps import limiter
+from app.api.deps import default_rate_limit, limiter
 from app.config import settings
 from app.core.database import create_all, engine, wait_for_db
 from app.core.logging_config import configure_logging
@@ -52,6 +52,7 @@ app = FastAPI(
     lifespan=lifespan,
     docs_url="/docs",
     openapi_url=f"{settings.API_PREFIX}/openapi.json",
+    dependencies=[Depends(default_rate_limit)],
 )
 
 app.state.limiter = limiter
@@ -65,8 +66,9 @@ app.add_middleware(
 )
 
 
+# Synchronous on purpose: SlowAPIMiddleware only calls a sync handler (it falls back to its own otherwise).
 @app.exception_handler(RateLimitExceeded)
-async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
     return JSONResponse({"detail": f"Rate limit exceeded: {exc.detail}"}, status_code=429)
 
 

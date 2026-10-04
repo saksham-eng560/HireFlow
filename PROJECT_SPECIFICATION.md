@@ -122,7 +122,7 @@ code disagree, the code wins: nothing is dropped, and later additions are carrie
 | Middleware stack (outermost first) | 1. `security_headers` (`@app.middleware("http")`, main.py:73-79) → 2. `CORSMiddleware` → 3. `SlowAPIMiddleware` → routes. Starlette makes the last-added middleware the outermost one. |
 | Security headers (set with `setdefault`, so a handler can override them) | `X-Content-Type-Options: nosniff`; `X-Frame-Options: SAMEORIGIN` (resume PDFs preview in same-origin iframes); `Referrer-Policy: strict-origin-when-cross-origin` |
 | CORS | `allow_origins = settings.cors_origins` (CSV `CORS_ORIGINS`, default `http://localhost:3000,http://127.0.0.1:3000`), `allow_credentials=True`, `allow_methods=["*"]`, `allow_headers=["*"]` |
-| Exception handler | `RateLimitExceeded` → `429` `{"detail": f"Rate limit exceeded: {exc.detail}"}`, for example `"Rate limit exceeded: 10 per 1 minute"` (main.py:68-70). This handler only serves limits raised by `@limiter.limit` decorators. A default limit enforced by `SlowAPIMiddleware` uses SlowAPI's own handler instead (the middleware replaces an `async` handler with it), so its body is `{"error": "Rate limit exceeded: ..."}` (see 1.2). |
+| Exception handler | `RateLimitExceeded` → `429` `{"detail": f"Rate limit exceeded: {exc.detail}"}`, for example `"Rate limit exceeded: 10 per 1 minute"` (main.py:70-72). The handler is a plain (sync) function, so it serves every rate limit, both the decorator limits and the default limit (see 1.2). |
 | Lifespan startup | `wait_for_db` (in a thread) → `create_all` only when `DATABASE_URL` is SQLite (PostgreSQL uses Alembic) → `manager.bind_loop(loop)` → `manager.start_subscriber()` (Redis `psubscribe("events:*")` when Redis is reachable) → `get_llm()` → log `"HireFlow API ready (env=%s, llm=%s, db=%s)"`. `llm` is the provider names or `"heuristics-only"`. In production, each `settings.validate_for_production()` problem is logged as `"CONFIG: %s"`. |
 | Lifespan shutdown | `manager.stop_subscriber()` |
 | Error body format | `HTTPException` → `{"detail": "<string>"}`. Pydantic request validation → FastAPI default `422` `{"detail": [{"type","loc","msg","input",...}]}`. |
@@ -202,24 +202,28 @@ The same token is also returned in the JSON body as `access_token`.
 
 ---
 
-### 1.2 Rate limiting (`api/deps.py:19-26`, `main.py:57-70`)
+### 1.2 Rate limiting (`api/deps.py:21-46`, `main.py:55-72`)
 
 ```python
 def _rate_key(request):
     token = request.cookies.get(settings.COOKIE_NAME) or request.headers.get("authorization", "")
-    return f"{get_remote_address(request)}:{hash(token) if token else ''}"
+    return f"{get_remote_address(request)}:{hashlib.sha256(token.encode()).hexdigest()[:16] if token else ''}"
 
 limiter = Limiter(key_func=_rate_key, default_limits=[settings.RATE_LIMIT_DEFAULT],
                   storage_uri=settings.REDIS_URL if settings.REDIS_URL and not settings.is_sqlite else "memory://",
                   enabled=settings.ENVIRONMENT != "test")
+
+def default_rate_limit(request: HTTPConnection) -> None:   # app-wide: FastAPI(dependencies=[Depends(default_rate_limit)])
+    ...  # applies RATE_LIMIT_DEFAULT to the matched endpoint unless already counted or decorated
 ```
 
 **Configuration**
-- **Default:** `RATE_LIMIT_DEFAULT = "300/minute"`. `SlowAPIMiddleware` applies it to undecorated HTTP routes. The WebSocket is not rate-limited, because the middleware is HTTP-only.
-  - **Which routes actually get the default depends on the installed FastAPI version.** The middleware finds the handler by scanning `app.routes` for a full match that has an `endpoint` attribute, and exempts the request when it finds none.
-  - With the FastAPI in the backend venv (0.142.x), `include_router` mounts each router as an `_IncludedRouter` object, which has no `endpoint`. Every `/api/v1/*` route is therefore exempt, and the default is enforced only on the app-level routes: `/health`, `/health/ready` and the 4 docs routes. This was verified with `RATE_LIMIT_DEFAULT=2/minute`: `/health` gave `429` on the 3rd call, while `/api/v1/auth/config` and `/api/v1/webhooks/gmail` were never limited.
-  - With FastAPI versions that copy included routes into `app.routes` as `APIRoute` objects (`requirements.txt` allows `fastapi>=0.115,<1`), the default applies to every undecorated HTTP route, including `/api/v1/webhooks/gmail`.
-  - Where the tables below say "global default", read it with this caveat.
+- **Default:** `RATE_LIMIT_DEFAULT = "300/minute"` applies to every undecorated HTTP route. That includes all `/api/v1/*` routes, `/health`, `/health/ready` and the docs routes. The WebSocket is not rate-limited.
+  - Two pieces enforce it. `SlowAPIMiddleware` handles the routes it can match in `app.routes`. The app-wide dependency `default_rate_limit` (`api/deps.py`) handles the rest.
+  - The dependency is needed on FastAPI ≥ 0.140, which keeps each included router in `app.routes` as an `_IncludedRouter` with no `endpoint`. The middleware can't see the `/api/v1/*` routes behind those entries and lets them through. The dependency runs after routing, when the matched endpoint (`request.scope["endpoint"]`) is known, and applies the default there.
+  - A request is never counted twice. The dependency skips requests the middleware already counted (`request.state.view_rate_limit` is set). That covers `/health`, `/health/ready`, and every route on FastAPI versions that flatten routes into `app.routes`.
+  - The dependency also skips decorated routes (endpoint name in the limiter's `_route_limits`), so they keep only their own limit.
+  - Regression test: `tests/test_security.py::test_default_rate_limit_covers_api_routes`. It was also checked on FastAPI 0.135 (flattened routes) and 0.142 (`_IncludedRouter`).
 - **Explicit limits:** a decorator replaces the default for its route. There are four:
 
   | Route | Decorator |
@@ -231,17 +235,16 @@ limiter = Limiter(key_func=_rate_key, default_limits=[settings.RATE_LIMIT_DEFAUL
 
   Each decorated handler takes `request: Request`, which SlowAPI requires.
 - **Storage:** Redis (`REDIS_URL`) unless the database is SQLite or `REDIS_URL` is empty. In those cases it is `memory://`, which is per process.
-- **Disabled** when `ENVIRONMENT == "test"`.
+- **Disabled** when `ENVIRONMENT == "test"`. The regression test swaps in an enabled limiter.
 
 **Bucket key behavior**
-- The key is `"<client IP>:<hash(token)>"`.
+- The key is `"<client IP>:<first 16 hex chars of sha256(token)>"`.
 - The token for the key is the **cookie first, then the raw `Authorization` header**. This is the reverse of the auth precedence.
 - Anonymous callers are keyed as `"<ip>:"`.
-- Python's `hash()` of a `str` is salted per process unless `PYTHONHASHSEED` is fixed. With several API processes sharing Redis, one client therefore gets a different bucket in each process. This is existing behavior and should be preserved, not fixed.
+- The digest is stable across processes, so all API workers sharing Redis put one client in one bucket. Earlier versions used Python's `hash()`, which is salted per process, so each worker counted separately. `tests/test_security.py::test_rate_limit_key_is_stable_across_processes` guards against a regression.
 
-**Over the limit:** the body depends on what enforced the limit.
-- A decorator limit gives `429 {"detail": "Rate limit exceeded: <N> per 1 minute"}`. The exception reaches the app's `RateLimitExceeded` handler.
-- The middleware default gives `429 {"error": "Rate limit exceeded: 300 per 1 minute"}`. `SlowAPIMiddleware` cannot await the app's `async` handler, so it falls back to SlowAPI's `_rate_limit_exceeded_handler`.
+**Over the limit:** every limit (decorator or default, from the middleware or the dependency) returns `429 {"detail": "Rate limit exceeded: <N> per 1 minute"}`.
+- SlowAPI's middleware only calls a *sync* exception handler and otherwise falls back to its own `{"error": …}` body. That is why `rate_limit_handler` is a plain function.
 
 No `X-RateLimit-*` headers are sent in either case, because SlowAPI's `headers_enabled` defaults to `False`.
 
@@ -430,7 +433,7 @@ These are the app-level routes in `main.py`, plus the WebSocket and the Gmail we
 - **Side effects:** when `data["emailAddress"]` is truthy, `enqueue("handle_gmail_push", emailAddress, str(historyId or ""))` runs immediately (no `after_commit`). The task resolves the user by `google_email` (case-insensitive), then falls back to `email`, and enqueues `check_user_email`.
 
 #### FastAPI-generated documentation routes
-`GET /docs` (Swagger UI), `GET /docs/oauth2-redirect`, `GET /redoc` and `GET /api/v1/openapi.json`. No auth. They are covered by the global default rate limit, because they are app-level routes that `SlowAPIMiddleware` can match (see 1.2). The OpenAPI title is `"HireFlow"`.
+`GET /docs` (Swagger UI), `GET /docs/oauth2-redirect`, `GET /redoc` and `GET /api/v1/openapi.json`. No auth. They are covered by the global default rate limit, which `SlowAPIMiddleware` enforces for these app-level routes (see 1.2). The OpenAPI title is `"HireFlow"`.
 
 ---
 
@@ -1276,7 +1279,7 @@ Every other expected endpoint exists in code with the stated method and path. No
 |---|---|
 | Mounting | `api/__init__.py` is empty (0 lines). Routers are mounted in `main.py:82-84`: `for router in (auth, users, resumes, jobs, applications, agent, communications, interviews, analytics, review, files): app.include_router(router, prefix=settings.API_PREFIX)`, with `API_PREFIX = "/api/v1"` (`config.py:49`). Router prefixes: `/applications` (`api/applications.py:43`), `/review` (`api/review.py:34`), `/agent` (`api/agent.py:23`), `/communications` (`api/communications.py:17`), `/interviews` (`api/interviews.py:21`). The analytics router has no prefix (`api/analytics.py:13`, `APIRouter(tags=["analytics"])`) and declares the full paths `/analytics/overview` and `/notifications…`. |
 | Auth | Every endpoint takes `CurrentUser = Annotated[User, Depends(get_current_user)]` (`api/deps.py:53,61`), which calls `_user_from_request(request, db, scopes=("access",))`. The token comes from the `Authorization: Bearer <jwt>` header when one is present. Otherwise it comes from the cookie `hireflow_session` (`settings.COOKIE_NAME`). The JWT is HS256, signed with `SECRET_KEY`, and its `scope` must be `"access"`, so extension-scope tokens are rejected here. The `sub` claim holds the user UUID. **401** details: `"Not authenticated"` (no token), `"Token expired"`, `"Invalid token"`, `"Token scope not allowed here"`, `"User not found or inactive"`, or `str(exc)` for a bad `sub`. No endpoint in this part is public or extension-accessible. |
-| Rate limit | No handler in this part has an `@limiter.limit(...)` decorator. In principle all of them get the **global default** `settings.RATE_LIMIT_DEFAULT = "300/minute"` (`config.py:62`), applied by `SlowAPIMiddleware` through `Limiter(default_limits=[...])` (`api/deps.py:24-26`, `main.py:57-58`). The key is `"{remote_ip}:{hash(token)}"`, where the token is the session cookie or else the raw `authorization` header. Storage is Redis when `REDIS_URL` is set and the DB is not SQLite, otherwise `memory://`. The limiter is disabled when `ENVIRONMENT == "test"`. Exceeding the middleware default returns **429** `{"error": "Rate limit exceeded: <limit>"}`, from SlowAPI's own `_rate_limit_exceeded_handler`. The app's `{"detail": ...}` handler (`main.py:68-70`) is `async`, so `SlowAPIMiddleware` cannot use it; that handler only serves decorator limits. **Caveat:** the middleware matches handlers by scanning `app.routes` for an `endpoint`. With the FastAPI in the backend venv (0.142.x), included routers appear there as `_IncludedRouter` objects without one, so every route in this part is in practice exempt from the default. Older FastAPI versions that flatten routes into `app.routes` do enforce it. See Section 1 Part A, 1.2. |
+| Rate limit | No handler in this part has an `@limiter.limit(...)` decorator. All of them get the **global default** `settings.RATE_LIMIT_DEFAULT = "300/minute"` (`config.py:62`). The app-wide dependency `default_rate_limit` (`api/deps.py:32-46`) enforces it after routing; `SlowAPIMiddleware` cannot match routes inside included routers on current FastAPI (see Section 1 Part A, 1.2). The key is `"{remote_ip}:{sha256(token)[:16]}"`, where the token is the session cookie or else the raw `authorization` header. Storage is Redis when `REDIS_URL` is set and the DB is not SQLite, otherwise `memory://`. The limiter is disabled when `ENVIRONMENT == "test"`. Exceeding it returns **429** `{"detail": "Rate limit exceeded: <limit>"}` (`main.py:70-72`). |
 | Transactions | `get_db()` (`core/database.py:149`) commits after the handler returns and rolls back on any exception, including `HTTPException`. A 4xx raised mid-handler therefore persists nothing. Tasks queued with `enqueue(..., after_commit=db)` are dispatched only after that commit. |
 | Path IDs | Every `{…_id}` path parameter is a `str` parsed with `parse_uuid()` (`api/deps.py:65`). A malformed UUID returns **404** `"Not found"`. A well-formed ID that is missing or belongs to another user returns **404** with the router-specific detail listed per endpoint. |
 | Validation | Pydantic/FastAPI validation failures return **422** with FastAPI's standard `{"detail": [...]}` list. Handler-raised 422s use a plain string `detail`. Request models use pydantic defaults, so unknown extra fields are ignored. No endpoint declares a `response_model`: responses are plain JSON dicts built by the serializers (see **Serializers**). Status code is 200 unless stated otherwise. |
@@ -3025,20 +3028,19 @@ The GDPR export (`GET /users/me/export`, file `hireflow-export-<YYYY-MM-DD>.json
 ```python
 def _rate_key(request):
     token = request.cookies.get(settings.COOKIE_NAME) or request.headers.get("authorization", "")
-    return f"{get_remote_address(request)}:{hash(token) if token else ''}"
+    return f"{get_remote_address(request)}:{hashlib.sha256(token.encode()).hexdigest()[:16] if token else ''}"
 
 limiter = Limiter(key_func=_rate_key, default_limits=[settings.RATE_LIMIT_DEFAULT],
                   storage_uri=settings.REDIS_URL if settings.REDIS_URL and not settings.is_sqlite else "memory://",
                   enabled=settings.ENVIRONMENT != "test")
 ```
 
-- **Key**: client IP (`request.client.host`, as set by uvicorn's proxy-headers handling), a colon, and Python `hash()` of the session cookie or `Authorization` header (empty for anonymous requests). Python's `str` hash is salted per process, so with several uvicorn workers (`API_WORKERS`, default 2) and shared Redis, the same client gets a different key in each worker. Effective limits are per worker. HireFlow keeps this behaviour unless it is fixed on purpose.
+- **Key**: client IP (`request.client.host`, as set by uvicorn's proxy-headers handling), a colon, and the first 16 hex characters of `sha256` of the session cookie or `Authorization` header (empty for anonymous requests). The digest is stable across processes, so with several uvicorn workers (`API_WORKERS`, default 2) and shared Redis one client has one bucket. Earlier versions used the per-process `hash()`, which gave per-worker limits.
 - **Storage**: `REDIS_URL` when it is set and the DB is not SQLite, otherwise `memory://`. SlowAPI defaults apply: `headers_enabled=False` (no `X-RateLimit-*` headers), `swallow_errors=False`, no in-memory fallback, `key_style="url"`. With that key style, limits are counted per request URL path, so two different IDs on the same route pattern have separate buckets.
 - **Enabled** unless `ENVIRONMENT == "test"`.
-- **Wiring** (`main.py`): `app.state.limiter = limiter` and `app.add_middleware(SlowAPIMiddleware)`. The middleware applies the default **300/minute** to undecorated HTTP routes. It skips decorated routes (slowapi `_should_exempt`: the route is in `_route_limits`), and the decorator enforces their own limit. WebSockets are not limited.
-  - **Caveat: which routes get the default depends on the FastAPI version.** The middleware finds the handler by scanning `app.routes` for a full match that has an `endpoint`, and `_should_exempt` also exempts a request when it finds no handler.
-  - With the FastAPI in the backend venv (0.142.x), routers are mounted as `_IncludedRouter` objects without an `endpoint`. Every `/api/v1/*` route is therefore exempt, and the default is enforced only on `/health`, `/health/ready` and the docs routes. This was verified with `RATE_LIMIT_DEFAULT=2/minute`.
-  - With FastAPI versions that copy included routes into `app.routes` (`requirements.txt` allows `fastapi>=0.115,<1`), the default covers every undecorated HTTP route.
+- **Wiring** (`main.py`): `app.state.limiter = limiter`, `app.add_middleware(SlowAPIMiddleware)`, and the app-wide dependency `FastAPI(dependencies=[Depends(default_rate_limit)])`. Together they apply the default **300/minute** to every undecorated HTTP route. Decorated routes keep only their own limit; WebSockets are not limited.
+  - The middleware finds a handler by scanning `app.routes`. On FastAPI ≥ 0.140 included routers appear there as `_IncludedRouter` objects without an `endpoint`, so for `/api/v1/*` it finds nothing and lets the request through.
+  - `default_rate_limit` runs after routing with the matched endpoint and applies the default there. It skips requests the middleware already counted (`request.state.view_rate_limit`) and decorated routes, so nothing is counted twice on any FastAPI version. The regression test is `tests/test_security.py::test_default_rate_limit_covers_api_routes`.
 - **Per-route limits** (only these routes are decorated; each one gets its own limit **instead of** the default):
 
 | Route | Limit |
@@ -3048,10 +3050,9 @@ limiter = Limiter(key_func=_rate_key, default_limits=[settings.RATE_LIMIT_DEFAUL
 | `POST /api/v1/users/me/integrations/llm/test` | `10/minute` |
 | `POST /api/v1/users/me/integrations/ollama/pull` | `10/minute` |
 
-- **Exceeded**: always HTTP **429**, but the body depends on which path caught the request:
-  - **Decorated routes**: the decorator raises `RateLimitExceeded` inside the endpoint. FastAPI's registered handler `rate_limit_handler` then returns `{"detail": "Rate limit exceeded: <exc.detail>"}`, for example `"Rate limit exceeded: 10 per 1 minute"`.
-  - **Default-limit routes**: the check runs in `SlowAPIMiddleware` through `sync_check_limits`. The registered handler is `async`, which that path cannot call, so slowapi falls back to its own `_rate_limit_exceeded_handler`, which returns `{"error": "Rate limit exceeded: 300 per 1 minute"}`.
-  - Neither path sends rate-limit headers.
+- **Exceeded**: always HTTP **429** `{"detail": "Rate limit exceeded: <exc.detail>"}` (for example `"Rate limit exceeded: 10 per 1 minute"`), from the registered `rate_limit_handler`.
+  - The handler is a sync function on purpose: `SlowAPIMiddleware` (`sync_check_limits`) can only call a sync handler and would otherwise fall back to SlowAPI's `{"error": …}` body.
+  - No rate-limit headers are sent.
 - Separate from HTTP limiting: `services/rate_limiter.py` holds per-platform outbound scraping and application limits backed by Redis with an in-memory fallback, for example LinkedIn 100 req/h, 25 applications/day and a 120–300 s cooldown, plus a 15-minute pause after an HTTP 429. Another section covers it.
 
 ### 4.10 Security headers
@@ -5500,8 +5501,8 @@ version_path_separator = os
 Source: `backend/tests/` — `__init__.py` (empty), `conftest.py`, **20 `test_*.py` modules**, `load/locustfile.py`,
 `fixtures/mock_ats/apply.html` and **18 files** in `fixtures/scrapers/`.
 
-**Totals:** 219 `def test_` functions → **280 collected test items** (parametrization). Reference results:
-**280 passed on SQLite**; **278 passed + 2 skipped ("SQLite only") on PostgreSQL + pgvector**. 22 items carry
+**Totals:** 221 `def test_` functions → **282 collected test items** (parametrization). Reference results:
+**282 passed on SQLite**; **280 passed + 2 skipped ("SQLite only") on PostgreSQL + pgvector**. 22 items carry
 the `e2e` marker (launch a real Chromium; additionally `skipif` Chromium unavailable). The `postgres` marker is
 declared in `pytest.ini` but not applied to any test.
 
@@ -5571,10 +5572,10 @@ Jan 2022–Present, Beta Labs intern, UC Berkeley B.S. CS 2017–2021, project J
 | `test_role_focus.py` | 8 | 21 | `parametrize` | AI-engineer focus, no focus no filter, preset built from the resume changes only what you look for, data-science titles skipped, AI scoring sees the focus, scan with the preset keeps AI/Python roles, waiting Java cards skipped, focus settings validated. |
 | `test_scan_speed.py` | 8 | 8 | — | Sources searched concurrently, slow source left out, boards in parallel with single-board failure isolation, LinkedIn doesn't re-download saved postings, progress reported until done, Stop ends a running scan, parallel LLM scoring, sources wrap up before the limit. |
 | `test_scrapers.py` | 14 | 14 | — | Snapshot tests, no network, one per platform: Greenhouse board / questions / fetch, Lever, Ashby, Workday, LinkedIn parsers + end-to-end search, Indeed parsers, Glassdoor + Wellfound parsers, generic JSON-LD + ATS delegation, helpers, 429 pauses the platform, company-name fallbacks, job page without JSON-LD uses site name. |
-| `test_security.py` | 4 | 4 | — | Password hashing round trip, JWT scopes + expiry, randomized AES-GCM, tokens encrypted at rest. |
+| `test_security.py` | 6 | 6 | — | Password hashing round trip, JWT scopes + expiry, randomized AES-GCM, tokens encrypted at rest, the default rate limit covering `/api/v1` routes (with one 429 body and no double counting), and a rate-limit key that is stable across processes. |
 | `test_self_applied.py` | 7 | 7 | — | "I Applied" → applied + tracking, self-applied section filters, logging an application made anywhere, progress updates on every channel, recruiter update text / own e-mails ignored, progress digest, agent stands down when you applied mid-fill. |
 | `test_swipe_review.py` | 15 | 15 | 2 tests `pytest.skip("SQLite only")` on PostgreSQL | Internship list scraper (`internship_listings.json`), `clean_url`, hard vs soft filters, internship preset + preset endpoint, review decisions, review requires resume + user scoping, SQLite upgrade adds new columns, undo skip only while skipped, stale prepare tasks never submit twice, undo during preparation respected, scan respects swipes made while running, no write lock held through LLM calls, `.env` inline comments are not values, resume strategies. |
-| **Total** | **219** | **280** | 22 `e2e` items | |
+| **Total** | **221** | **282** | 22 `e2e` items | |
 
 ### 16.4 Fixture data files
 
@@ -5628,8 +5629,8 @@ Phase 6 results for the HireFlow tree, run on 4 Oct 2026 against AutoApply AI `8
 | 4 | Schema (PostgreSQL 16 + pgvector) | `alembic upgrade head` → `alembic check` → `alembic downgrade base` → `alembic upgrade head` → `alembic check` | Upgrade, downgrade and re-upgrade all ran cleanly. Both checks: "No new upgrade operations detected". |
 | 5 | Squash equivalence | `pg_dump --schema-only` of the old 6-revision chain vs the new single revision | Identical. The 877-line dumps differ only in `pg_dump`'s random `\restrict` session token. |
 | 6 | Backend lint | `ruff check app tests alembic/env.py`, `ruff check ../scripts`, `bandit -q -r app -ll` | All pass. |
-| 7 | Backend tests (SQLite) | `pytest -q` | 280 passed. Baseline: the AutoApply AI suite on the same machine also gives 280 passed. |
-| 8 | Backend tests (PostgreSQL + pgvector, incl. browser end-to-end) | `TEST_DATABASE_URL=… pytest -q --cov=app` | 278 passed, 2 skipped (marked "SQLite only"). 78 % coverage. |
+| 7 | Backend tests (SQLite) | `pytest -q` | 280 passed at migration time, the same as the AutoApply AI baseline on the same machine. After the rate-limit fix and its 2 tests: 282 passed. |
+| 8 | Backend tests (PostgreSQL + pgvector, incl. browser end-to-end) | `TEST_DATABASE_URL=… pytest -q --cov=app` | 278 passed, 2 skipped (marked "SQLite only") at migration time, with 78 % coverage. After the rate-limit fix: 280 passed, 2 skipped. |
 | 9 | Dashboard | `npm ci`, `npm run lint`, `npm run typecheck`, `npm run build` | All pass. The build generates 19 routes: every page in Section 5 plus `/_not-found`. |
 | 10 | Extension | MV3 manifest check, `node --check *.js` | `HireFlow — Session Sync` v1.1.1. All scripts parse. |
 | 11 | Docker | `docker build` of `backend/Dockerfile` and `frontend/Dockerfile`, then the CI smoke test | Both images build. The backend image imports `app.main` and `app.worker.celery_app` and launches Chromium 141. The dashboard image serves `/` with `<title>HireFlow</title>`. |
@@ -5639,14 +5640,19 @@ Phase 6 results for the HireFlow tree, run on 4 Oct 2026 against AutoApply AI `8
 | 15 | Spec cross-check (QA) | Two QA agents checked every item in Sections 1–16 against the HireFlow tree: registered routes enumerated from `app.routes`, `Base.metadata` compared column by column, the live `Settings` model, Celery config, `pytest --collect-only`, `find`/`grep` counts, and a 46-case TestClient smoke run | **PASS, no code gaps.** 102 endpoints (98 app + 4 FastAPI docs) match in both directions. 10 tables / 199 columns / 14 FKs / 27 indexes. 22 route files. 24 components + 26 ui primitives + 4 hooks. 16 Celery tasks + 9 beat entries. 12 registered scrapers. 6 submitters. 11 prompts. 89 settings. 20 test files / 219 test functions / 280 collected tests. 36 small wording/detail corrections were applied to this document. |
 | 16 | GitHub Actions CI | `ci.yml` on the pushed branch | All four jobs green: extension; dashboard lint/typecheck/build; backend ruff, bandit, migration cycle, SQLite tests and PostgreSQL + pgvector tests with browser end-to-end; Docker images + smoke test. |
 
+### Fixed after the migration
+
+- **Global rate limit:** fixed in a follow-up commit. On FastAPI ≥ 0.140, `SlowAPIMiddleware` let every `/api/v1/*` route through, because included routers appear in `app.routes` as `_IncludedRouter` objects. An app-wide `default_rate_limit` dependency now applies the default after routing, without double counting where the middleware already did.
+  - 429 bodies are now always `{"detail": …}`.
+  - The bucket key uses a stable `sha256` digest instead of the per-process `hash()`.
+  - See 1.2 and 4.9.
+
 ### Pre-existing behaviour carried over unchanged
 
 These were found during verification. They behave the same in AutoApply AI `8fe0747`, and the migration preserves them as they are rather than fixing them.
 
-- **Global rate limit:** with FastAPI 0.142.x (allowed by `fastapi>=0.115,<1`), SlowAPI's default `RATE_LIMIT_DEFAULT` (300/minute) is applied only to `/health`, `/health/ready` and the docs routes. It does not apply to `/api/v1/*` routes, because they are mounted as included routers. Per-route decorator limits (e.g. auth `5/minute`) work.
-  - A 429 from the default limit returns `{"error": …}`; decorator limits return `{"detail": …}`.
-  - The limiter key uses Python's per-process `hash()`, so each API worker counts separately.
 - `GET /api/v1/applications?status=` (empty value) returns no items.
+- With `fastapi` 0.115–0.120, which `requirements.txt` still allows (`>=0.115`), the SlowAPI-decorated endpoints (`register`, `login`, `llm/test`, `ollama/pull`) answer `422`, because their string annotations can't be resolved through the decorator. That is also the case in the source. Versions from 0.128 up, and fresh installs, which get the latest version, work.
 - Unused settings: `APP_NAME`, `DEBUG`, `SCAN_INTERVAL_HOURS`.
 - The `postgres` pytest marker is declared but never applied.
 - `{max_applications_per_day}` in `prompts/master_system.txt` is never substituted.
