@@ -122,7 +122,7 @@ code disagree, the code wins: nothing is dropped, and later additions are carrie
 | Middleware stack (outermost first) | 1. `security_headers` (`@app.middleware("http")`, main.py:73-79) → 2. `CORSMiddleware` → 3. `SlowAPIMiddleware` → routes. Starlette makes the last-added middleware the outermost one. |
 | Security headers (set with `setdefault`, so a handler can override them) | `X-Content-Type-Options: nosniff`; `X-Frame-Options: SAMEORIGIN` (resume PDFs preview in same-origin iframes); `Referrer-Policy: strict-origin-when-cross-origin` |
 | CORS | `allow_origins = settings.cors_origins` (CSV `CORS_ORIGINS`, default `http://localhost:3000,http://127.0.0.1:3000`), `allow_credentials=True`, `allow_methods=["*"]`, `allow_headers=["*"]` |
-| Exception handler | `RateLimitExceeded` → `429` `{"detail": f"Rate limit exceeded: {exc.detail}"}`, for example `"Rate limit exceeded: 10 per 1 minute"` (main.py:68-70) |
+| Exception handler | `RateLimitExceeded` → `429` `{"detail": f"Rate limit exceeded: {exc.detail}"}`, for example `"Rate limit exceeded: 10 per 1 minute"` (main.py:68-70). This handler only serves limits raised by `@limiter.limit` decorators. A default limit enforced by `SlowAPIMiddleware` uses SlowAPI's own handler instead (the middleware replaces an `async` handler with it), so its body is `{"error": "Rate limit exceeded: ..."}` (see 1.2). |
 | Lifespan startup | `wait_for_db` (in a thread) → `create_all` only when `DATABASE_URL` is SQLite (PostgreSQL uses Alembic) → `manager.bind_loop(loop)` → `manager.start_subscriber()` (Redis `psubscribe("events:*")` when Redis is reachable) → `get_llm()` → log `"HireFlow API ready (env=%s, llm=%s, db=%s)"`. `llm` is the provider names or `"heuristics-only"`. In production, each `settings.validate_for_production()` problem is logged as `"CONFIG: %s"`. |
 | Lifespan shutdown | `manager.stop_subscriber()` |
 | Error body format | `HTTPException` → `{"detail": "<string>"}`. Pydantic request validation → FastAPI default `422` `{"detail": [{"type","loc","msg","input",...}]}`. |
@@ -202,7 +202,7 @@ The same token is also returned in the JSON body as `access_token`.
 
 ---
 
-### 1.2 Rate limiting (`api/deps.py:14-23`, `main.py:57-70`)
+### 1.2 Rate limiting (`api/deps.py:19-26`, `main.py:57-70`)
 
 ```python
 def _rate_key(request):
@@ -215,7 +215,11 @@ limiter = Limiter(key_func=_rate_key, default_limits=[settings.RATE_LIMIT_DEFAUL
 ```
 
 **Configuration**
-- **Default:** `RATE_LIMIT_DEFAULT = "300/minute"`. `SlowAPIMiddleware` applies it to every HTTP route that has no `@limiter.limit` decorator, including `/health`, `/health/ready`, the docs routes and `/api/v1/webhooks/gmail`. The WebSocket is not rate-limited, because the middleware is HTTP-only.
+- **Default:** `RATE_LIMIT_DEFAULT = "300/minute"`. `SlowAPIMiddleware` applies it to undecorated HTTP routes. The WebSocket is not rate-limited, because the middleware is HTTP-only.
+  - **Which routes actually get the default depends on the installed FastAPI version.** The middleware finds the handler by scanning `app.routes` for a full match that has an `endpoint` attribute, and exempts the request when it finds none.
+  - With the FastAPI in the backend venv (0.142.x), `include_router` mounts each router as an `_IncludedRouter` object, which has no `endpoint`. Every `/api/v1/*` route is therefore exempt, and the default is enforced only on the app-level routes: `/health`, `/health/ready` and the 4 docs routes. This was verified with `RATE_LIMIT_DEFAULT=2/minute`: `/health` gave `429` on the 3rd call, while `/api/v1/auth/config` and `/api/v1/webhooks/gmail` were never limited.
+  - With FastAPI versions that copy included routes into `app.routes` as `APIRoute` objects (`requirements.txt` allows `fastapi>=0.115,<1`), the default applies to every undecorated HTTP route, including `/api/v1/webhooks/gmail`.
+  - Where the tables below say "global default", read it with this caveat.
 - **Explicit limits:** a decorator replaces the default for its route. There are four:
 
   | Route | Decorator |
@@ -235,7 +239,11 @@ limiter = Limiter(key_func=_rate_key, default_limits=[settings.RATE_LIMIT_DEFAUL
 - Anonymous callers are keyed as `"<ip>:"`.
 - Python's `hash()` of a `str` is salted per process unless `PYTHONHASHSEED` is fixed. With several API processes sharing Redis, one client therefore gets a different bucket in each process. This is existing behavior and should be preserved, not fixed.
 
-**Over the limit:** `429 {"detail": "Rate limit exceeded: <N> per 1 minute"}`. No `X-RateLimit-*` headers are sent, because SlowAPI's `headers_enabled` defaults to `False`.
+**Over the limit:** the body depends on what enforced the limit.
+- A decorator limit gives `429 {"detail": "Rate limit exceeded: <N> per 1 minute"}`. The exception reaches the app's `RateLimitExceeded` handler.
+- The middleware default gives `429 {"error": "Rate limit exceeded: 300 per 1 minute"}`. `SlowAPIMiddleware` cannot await the app's `async` handler, so it falls back to SlowAPI's `_rate_limit_exceeded_handler`.
+
+No `X-RateLimit-*` headers are sent in either case, because SlowAPI's `headers_enabled` defaults to `False`.
 
 ---
 
@@ -294,8 +302,9 @@ limiter = Limiter(key_func=_rate_key, default_limits=[settings.RATE_LIMIT_DEFAUL
 | Field | Type / notes |
 |---|---|
 | `id` | str |
-| `company_name`, `company_logo_url`, `role_title`, `location` | str \| null |
-| `is_remote` | bool \| null |
+| `company_name`, `role_title` | str (both columns are NOT NULL) |
+| `company_logo_url`, `location` | str \| null |
+| `is_remote` | bool (NOT NULL column, default `false`) |
 | `job_type` | enum value: `full-time`, `part-time`, `internship`, `contract`, `freelance` |
 | `experience_level` | enum value: `entry`, `mid`, `senior`, `lead`, `executive`, `internship` |
 | `salary_min`, `salary_max`, `salary_currency` | number / str \| null |
@@ -421,7 +430,7 @@ These are the app-level routes in `main.py`, plus the WebSocket and the Gmail we
 - **Side effects:** when `data["emailAddress"]` is truthy, `enqueue("handle_gmail_push", emailAddress, str(historyId or ""))` runs immediately (no `after_commit`). The task resolves the user by `google_email` (case-insensitive), then falls back to `email`, and enqueues `check_user_email`.
 
 #### FastAPI-generated documentation routes
-`GET /docs` (Swagger UI), `GET /docs/oauth2-redirect`, `GET /redoc` and `GET /api/v1/openapi.json`. No auth. They are covered by the global default rate limit, because `SlowAPIMiddleware` applies to all HTTP routes. The OpenAPI title is `"HireFlow"`.
+`GET /docs` (Swagger UI), `GET /docs/oauth2-redirect`, `GET /redoc` and `GET /api/v1/openapi.json`. No auth. They are covered by the global default rate limit, because they are app-level routes that `SlowAPIMiddleware` can match (see 1.2). The OpenAPI title is `"HireFlow"`.
 
 ---
 
@@ -728,7 +737,7 @@ These are the app-level routes in `main.py`, plus the WebSocket and the Gmail we
 - **Handler:** `list_field_mappings`, users.py:183
 - **Response:** `200 {"mappings": [FieldMappingOut], "standard_fields": STANDARD_FIELDS}`
   - `FieldMappingOut = {field_name, field_value, field_type, is_secret}`. When `field_name` contains `"password"`, `field_value` is `"********"` and `is_secret` is true.
-  - `STANDARD_FIELDS` (`services/question_answerer.py`) is a dict of `field_key → {label, type ("radio"|"number"|"text"|"select"), options?}`. Examples: `work_authorization`, `requires_sponsorship`, `willing_to_relocate`, `years_experience`, `salary_expectation`, `expected_stipend`, `notice_period`, `highest_education`, `how_did_you_hear`, `over_18`, `pronouns`, `gender`, `race_ethnicity`, `hispanic_latino`, and more.
+  - `STANDARD_FIELDS` (`services/question_answerer.py`) is a dict of 30 entries, `field_key → {label, type ("radio"|"number"|"text"|"select"|"password"), options?}`. The only `"password"` entry is `workday_password`. Examples: `work_authorization`, `requires_sponsorship`, `willing_to_relocate`, `years_experience`, `salary_expectation`, `expected_stipend`, `notice_period`, `highest_education`, `how_did_you_hear`, `over_18`, `pronouns`, `gender`, `race_ethnicity`, `hispanic_latino`, and more.
   - This GET does **not** list `ats_credentials` keys. The PUT response does.
 
 #### `PUT /api/v1/users/me/field-mappings`
@@ -898,7 +907,8 @@ These are the app-level routes in `main.py`, plus the WebSocket and the Gmail we
 - **Handler:** `check_internshala_session`, users.py:388
 - **Response:** `200 {"session_valid": bool, "checked_at": "<ISO>"}`
 - **Side effects:**
-  - Launches a real Playwright browser with the stored cookies and user agent, and opens `https://internshala.com` plus the dashboard path (`/student/dashboard`). The session is invalid if the page lands on `/login`.
+  - Launches a real Playwright browser with the stored cookies and user agent (no proxy), and opens `https://internshala.com` plus the dashboard path (`/student/dashboard`).
+  - The session is invalid if the page lands on `/login` or a sign-up path (`/registration`, `/signup`, `/sign-up`, `/register`). Otherwise it is valid when the URL still contains `/student/dashboard` or the profile icon `div.profile_icon_right` is visible.
   - Sets `internshala_session_valid`. If valid, runs `restage_internshala_waiting`.
 - **Errors:**
   - `400 "Internshala login not synced yet — use the browser extension"`
@@ -974,7 +984,7 @@ These are the app-level routes in `main.py`, plus the WebSocket and the Gmail we
   - The type is detected by filename or content:
     - `.pdf`, or content starting with `%PDF`: pypdf. For one-word-per-line exports, lines are rebuilt from word positions, and link URIs are inserted after the first line.
     - `.docx`: python-docx paragraphs plus table rows joined with `" | "`.
-    - `.txt`, `.md` or no filename: UTF-8 decode with `errors="replace"`.
+    - `.txt` or `.md`: UTF-8 decode with `errors="replace"`. `extract_text` also does this for an empty name, but the upload passes `file.filename or "resume"`, so a file without a name is rejected as unsupported unless its content starts with `%PDF`.
   - The extracted text must be at least 50 characters after cleanup.
 - **Processing:**
   1. `parse_resume_text(text)` runs in a worker thread. It tries the LLM first (prompt `resume_parser`, `effort="low"`) and the result counts as `"llm"` when it yields experience, education or technical skills. Otherwise the heuristic parser is used (`"heuristic"`).
@@ -1266,7 +1276,7 @@ Every other expected endpoint exists in code with the stated method and path. No
 |---|---|
 | Mounting | `api/__init__.py` is empty (0 lines). Routers are mounted in `main.py:82-84`: `for router in (auth, users, resumes, jobs, applications, agent, communications, interviews, analytics, review, files): app.include_router(router, prefix=settings.API_PREFIX)`, with `API_PREFIX = "/api/v1"` (`config.py:49`). Router prefixes: `/applications` (`api/applications.py:43`), `/review` (`api/review.py:34`), `/agent` (`api/agent.py:23`), `/communications` (`api/communications.py:17`), `/interviews` (`api/interviews.py:21`). The analytics router has no prefix (`api/analytics.py:13`, `APIRouter(tags=["analytics"])`) and declares the full paths `/analytics/overview` and `/notifications…`. |
 | Auth | Every endpoint takes `CurrentUser = Annotated[User, Depends(get_current_user)]` (`api/deps.py:53,61`), which calls `_user_from_request(request, db, scopes=("access",))`. The token comes from the `Authorization: Bearer <jwt>` header when one is present. Otherwise it comes from the cookie `hireflow_session` (`settings.COOKIE_NAME`). The JWT is HS256, signed with `SECRET_KEY`, and its `scope` must be `"access"`, so extension-scope tokens are rejected here. The `sub` claim holds the user UUID. **401** details: `"Not authenticated"` (no token), `"Token expired"`, `"Invalid token"`, `"Token scope not allowed here"`, `"User not found or inactive"`, or `str(exc)` for a bad `sub`. No endpoint in this part is public or extension-accessible. |
-| Rate limit | No handler in this part has an `@limiter.limit(...)` decorator. All of them get the **global default** `settings.RATE_LIMIT_DEFAULT = "300/minute"` (`config.py:62`), applied by `SlowAPIMiddleware` through `Limiter(default_limits=[...])` (`api/deps.py:24-26`, `main.py:57-58`). The key is `"{remote_ip}:{hash(token)}"`, where the token is the session cookie or else the raw `authorization` header. Storage is Redis when `REDIS_URL` is set and the DB is not SQLite, otherwise `memory://`. The limiter is disabled when `ENVIRONMENT == "test"`. Exceeding it returns **429** `{"detail": "Rate limit exceeded: <limit>"}` (`main.py:68-70`). |
+| Rate limit | No handler in this part has an `@limiter.limit(...)` decorator. In principle all of them get the **global default** `settings.RATE_LIMIT_DEFAULT = "300/minute"` (`config.py:62`), applied by `SlowAPIMiddleware` through `Limiter(default_limits=[...])` (`api/deps.py:24-26`, `main.py:57-58`). The key is `"{remote_ip}:{hash(token)}"`, where the token is the session cookie or else the raw `authorization` header. Storage is Redis when `REDIS_URL` is set and the DB is not SQLite, otherwise `memory://`. The limiter is disabled when `ENVIRONMENT == "test"`. Exceeding the middleware default returns **429** `{"error": "Rate limit exceeded: <limit>"}`, from SlowAPI's own `_rate_limit_exceeded_handler`. The app's `{"detail": ...}` handler (`main.py:68-70`) is `async`, so `SlowAPIMiddleware` cannot use it; that handler only serves decorator limits. **Caveat:** the middleware matches handlers by scanning `app.routes` for an `endpoint`. With the FastAPI in the backend venv (0.142.x), included routers appear there as `_IncludedRouter` objects without one, so every route in this part is in practice exempt from the default. Older FastAPI versions that flatten routes into `app.routes` do enforce it. See Section 1 Part A, 1.2. |
 | Transactions | `get_db()` (`core/database.py:149`) commits after the handler returns and rolls back on any exception, including `HTTPException`. A 4xx raised mid-handler therefore persists nothing. Tasks queued with `enqueue(..., after_commit=db)` are dispatched only after that commit. |
 | Path IDs | Every `{…_id}` path parameter is a `str` parsed with `parse_uuid()` (`api/deps.py:65`). A malformed UUID returns **404** `"Not found"`. A well-formed ID that is missing or belongs to another user returns **404** with the router-specific detail listed per endpoint. |
 | Validation | Pydantic/FastAPI validation failures return **422** with FastAPI's standard `{"detail": [...]}` list. Handler-raised 422s use a plain string `detail`. Request models use pydantic defaults, so unknown extra fields are ignored. No endpoint declares a `response_model`: responses are plain JSON dicts built by the serializers (see **Serializers**). Status code is 200 unless stated otherwise. |
@@ -1314,7 +1324,7 @@ Shared helpers:
 
 | Name | Type | Default | Validation / semantics |
 |---|---|---|---|
-| `status` (Python name `status_filter`, `alias="status"`) | `list[str] \| None` | `None` | Repeatable (`?status=a&status=b`), and each value may also be comma-separated (`?status=a,b`). Empty parts are ignored. Every part must be an `ApplicationStatus` value, otherwise **422** `"Unknown status"`. Filters `Application.status IN (...)`. **When absent or empty**, the list excludes `discovered`, `matched` and `skipped`, because jobs not yet picked live in Swipe Review. |
+| `status` (Python name `status_filter`, `alias="status"`) | `list[str] \| None` | `None` | Repeatable (`?status=a&status=b`), and each value may also be comma-separated (`?status=a,b`). Empty parts are ignored. Every part must be an `ApplicationStatus` value, otherwise **422** `"Unknown status"`. Filters `Application.status IN (...)`. **When absent**, the list excludes `discovered`, `matched` and `skipped`, because jobs not yet picked live in Swipe Review. A present but empty value (`?status=` or `?status=,`) is still a non-empty list, so it builds `IN ()` with no statuses and returns no items. |
 | `q` | `str \| None` | `None` | Case-insensitive substring: `lower(Job.role_title) LIKE %q%` OR `lower(Job.company_name) LIKE %q%`. |
 | `platform` | `str \| None` | `None` | Exact match on `Job.source_platform`. Should be an `ATSPlatform` value; the handler does not validate it. |
 | `needs_review` | `bool \| None` | `None` | `Application.needs_manual_review IS <value>`. |
@@ -1756,7 +1766,7 @@ Router `api/agent.py` (`APIRouter(prefix="/agent", tags=["agent"])`, `:23`). It 
 #### `GET /api/v1/agent/runs`
 - **Handler:** `list_runs`, `api/agent.py:75-83`
 - **Query:**
-  - `run_type: str | None`. Exact match on `AgentRun.run_type`, which is one of `scan | apply | email_check | linkedin_sync | prepare`. Not validated.
+  - `run_type: str | None`. Exact match on `AgentRun.run_type`. The model comment lists `scan | apply | email_check | linkedin_sync | prepare`, but the code only creates `scan`, `apply` and `prepare` runs. Not validated.
   - `page: int = 1` (`ge=1`).
   - `page_size: int = 25` (`ge=1, le=100`).
 - **Response 200:** `{"items": [run_out(r) …] (no log), "total": int, "page": int}`, ordered by `started_at DESC`. The response has no `page_size` key.
@@ -1980,7 +1990,7 @@ Router `api/analytics.py` (`APIRouter(tags=["analytics"])`, `:13`, no prefix).
   - `timeline`: exactly 30 entries `{date: "YYYY-MM-DD", discovered, applied, responses}` for the last 30 UTC days, oldest first. Counts are bucketed by `created_at`, `submitted_at` and `first_response_at` respectively.
   - `match_distribution`: 10 buckets `{range: "0-9" | "10-19" | … | "80-89" | "90-100", count}`.
   - `platforms`: `[{platform, discovered, applied, responses, interviews, response_rate, interview_rate}]`, keyed by `Job.source_platform` and sorted by `applied` DESC.
-  - `top_keywords`: at most 12 entries `{keyword, applications, callbacks, callback_rate, lift}`. They come from the skills of submitted jobs that appear at least twice, sorted by `callback_rate` DESC then `applications` DESC. A positive outcome is an interview stage, or a response that is not a rejection. `lift` is the rate divided by the base rate, or `0`.
+  - `top_keywords`: at most 12 entries `{keyword, applications, callbacks, callback_rate, lift}`. They come from the 60 most common skills of submitted jobs, keeping those that appear at least twice, sorted by `callback_rate` DESC then `applications` DESC. `callback_rate` is a percentage rounded to 1 decimal. A positive outcome is an interview stage, or a response that is not a rejection. `lift` is the rate divided by the base rate, or `0`.
   - `upcoming_interviews`: at most 5 entries `{id, company, role, scheduled_at, type}` with `scheduled_at >= now`, ascending. This list ignores `days`.
   - `recent_runs`: at most 10 entries `{id, run_type, status, started_at, jobs_discovered, jobs_matched, errors_count}`, ordered by `started_at DESC`. This list ignores `days`.
 - **Side effects:** none.
@@ -2219,7 +2229,7 @@ Only when `brief=False`:
 
 #### `run_out(run, include_log=False)` (`:234`)
 - `id`: str
-- `run_type`: `scan | apply | email_check | linkedin_sync | prepare`
+- `run_type`: `scan | apply | email_check | linkedin_sync | prepare` per the model comment; the code only creates `scan`, `apply` and `prepare`
 - `status`: `running | completed | failed | cancelled`
 - `trigger`: `user | schedule | system`
 - `jobs_discovered`, `jobs_matched`, `applications_prepared`, `applications_submitted`, `errors_count`: int
@@ -2238,7 +2248,7 @@ Known `event_type` values (`services/notifier.py:24`): `application_ready, appli
 
 ## Section 2: Complete Database Schema Registry
 
-Source of truth: `backend/app/models/*.py` (SQLAlchemy 2.x declarative, `Mapped[...]` + `mapped_column`), cross-checked against `backend/alembic/versions/0001`–`0006` and against the DDL that SQLAlchemy compiles from the model metadata for PostgreSQL. All names below are HireFlow names; there is no product branding anywhere in table, column, index, constraint or enum names, so the schema is byte-identical to the source.
+Source of truth: `backend/app/models/*.py` (SQLAlchemy 2.x declarative, `Mapped[...]` + `mapped_column`), cross-checked against the source chain `backend/alembic/versions/0001`–`0006` (HireFlow squashes it into a single `0001_initial_schema.py`, see 15.9) and against the DDL that SQLAlchemy compiles from the model metadata for PostgreSQL. All names below are HireFlow names; there is no product branding anywhere in table, column, index, constraint or enum names, so the schema is byte-identical to the source.
 
 ### 2.0 Overview and conventions
 
@@ -2508,7 +2518,7 @@ Column-table legend: **Null** = DB nullability. **Default** = Python-side `defau
 | 14 | `attachments` | `JSONType` | `JSONB` | NULL | — | — | `list[dict]` | 0001 |
 | 15 | `detected_intent` | `EMAIL_INTENT_ENUM` | `email_intent` | NULL | — | — | — | 0001 |
 | 16 | `intent_confidence` | `Float` (explicit) | `FLOAT` | NULL | — | — | — | 0001 |
-| 17 | `urgency` | `String(16)` | `VARCHAR(16)` | NULL | — | — | — | 0001 |
+| 17 | `urgency` | `String(16)` | `VARCHAR(16)` | NULL | — | — | values `high` / `medium` / `low` (e-mail parser) | 0001 |
 | 18 | `extracted_details` | `JSONType` | `JSONB` | NULL | — | — | — | 0001 |
 | 19 | `suggested_reply` | `Text` | `TEXT` | NULL | — | — | — | 0001 |
 | 20 | `gmail_draft_id` | `String(255)` | `VARCHAR(255)` | NULL | — | — | — | 0001 |
@@ -2535,7 +2545,7 @@ Column-table legend: **Null** = DB nullability. **Default** = Python-side `defau
 | 8 | `duration_minutes` | `Integer` | `INTEGER` | NOT NULL | `60` | — | — | 0001 |
 | 9 | `timezone` | `String(50)` | `VARCHAR(50)` | NOT NULL | `"UTC"` | — | — | 0001 |
 | 10 | `meeting_link` | `Text` | `TEXT` | NULL | — | — | — | 0001 |
-| 11 | `meeting_platform` | `String(50)` | `VARCHAR(50)` | NULL | — | — | values `zoom` / `google_meet` / `teams` / `onsite` / `phone` | 0001 |
+| 11 | `meeting_platform` | `String(50)` | `VARCHAR(50)` | NULL | — | — | values written by code: `zoom` / `google_meet` / `teams` / `webex` / `calendly` / `coderpad` / `jitsi` / `other` (from `email_parser.meeting_platform(link)`), `onsite` (`POST /interviews` with no link but a physical location) and `phone` (e-mail parser, phone screen with no link). The model comment lists only `zoom` / `google_meet` / `teams` / `onsite` / `phone`. | 0001 |
 | 12 | `physical_location` | `Text` | `TEXT` | NULL | — | — | — | 0001 |
 | 13 | `interviewer_names` | `JSONType` | `JSONB` | NULL | — | — | `list[str]` | 0001 |
 | 14 | `interviewer_titles` | `JSONType` | `JSONB` | NULL | — | — | `list[str]` | 0001 |
@@ -2560,7 +2570,7 @@ Column-table legend: **Null** = DB nullability. **Default** = Python-side `defau
 |---|---|---|---|---|---|---|---|---|
 | 1 | `id` | `Uuid` | `UUID` | NOT NULL | `uuid.uuid4` | — | PK | 0001 |
 | 2 | `user_id` | `Uuid` | `UUID` | NOT NULL | — | — | FK → `users.id` **ON DELETE CASCADE**; index `ix_agent_runs_user_id` | 0001 |
-| 3 | `run_type` | `String(50)` | `VARCHAR(50)` | NOT NULL | — | — | values `scan` / `apply` / `email_check` / `linkedin_sync` / `prepare` | 0001 |
+| 3 | `run_type` | `String(50)` | `VARCHAR(50)` | NOT NULL | — | — | values `scan` / `apply` / `email_check` / `linkedin_sync` / `prepare` per the model comment; the code only creates `scan`, `apply` and `prepare` runs | 0001 |
 | 4 | `status` | `String(20)` | `VARCHAR(20)` | NOT NULL | `"running"` | — | values `running` / `completed` / `failed` / `cancelled` | 0001 |
 | 5 | `trigger` | `String(20)` | `VARCHAR(20)` | NULL | `"user"` | — | values `user` / `schedule` / `system` | 0001 |
 | 6 | `jobs_discovered` | `Integer` | `INTEGER` | NOT NULL | `0` | — | — | 0001 |
@@ -2985,7 +2995,7 @@ response.set_cookie("hireflow_session", <access JWT>, httponly=True, secure=sett
 
   `LinkedInCookieIn.li_at` must be 10–4000 characters.
 - **Google OAuth `oauth_state`**:
-  - `GET /auth/google/login?next=` → 302 to Google with `prompt=select_account` and scopes `openid email profile`.
+  - `GET /auth/google/login?next=` → 307 (Starlette `RedirectResponse` default) to Google with `prompt=select_account` and scopes `openid email profile`.
   - `GET /auth/google/connect` (requires `access`) → JSON `{"url": …}` with `prompt=consent`. Scopes are the login scopes plus `gmail.readonly`, `gmail.modify`, `gmail.labels`, `calendar.events` and `calendar.readonly`. Both modes use `access_type=offline` and `include_granted_scopes=true`.
   - Redirect URI: `GOOGLE_REDIRECT_URI`, or `{FRONTEND_URL}{API_PREFIX}/auth/google/callback`.
   - Callback errors (`error` set, missing `code` or `state`, a bad or expired state, a failed token exchange or userinfo call) redirect to `{FRONTEND_URL}/login?error=google_oauth_failed` (or `?error=<error>`).
@@ -3023,9 +3033,12 @@ limiter = Limiter(key_func=_rate_key, default_limits=[settings.RATE_LIMIT_DEFAUL
 ```
 
 - **Key**: client IP (`request.client.host`, as set by uvicorn's proxy-headers handling), a colon, and Python `hash()` of the session cookie or `Authorization` header (empty for anonymous requests). Python's `str` hash is salted per process, so with several uvicorn workers (`API_WORKERS`, default 2) and shared Redis, the same client gets a different key in each worker. Effective limits are per worker. HireFlow keeps this behaviour unless it is fixed on purpose.
-- **Storage**: `REDIS_URL` when it is set and the DB is not SQLite, otherwise `memory://`. SlowAPI defaults apply: `headers_enabled=False` (no `X-RateLimit-*` headers), `swallow_errors=False`, no in-memory fallback, `key_style="url"` (limits are counted per route).
+- **Storage**: `REDIS_URL` when it is set and the DB is not SQLite, otherwise `memory://`. SlowAPI defaults apply: `headers_enabled=False` (no `X-RateLimit-*` headers), `swallow_errors=False`, no in-memory fallback, `key_style="url"`. With that key style, limits are counted per request URL path, so two different IDs on the same route pattern have separate buckets.
 - **Enabled** unless `ENVIRONMENT == "test"`.
-- **Wiring** (`main.py`): `app.state.limiter = limiter` and `app.add_middleware(SlowAPIMiddleware)`. The middleware applies the default **300/minute** to every HTTP route that has no `@limiter.limit` decorator. It skips decorated routes (slowapi `_should_exempt`: the route is in `_route_limits`), and the decorator enforces their own limit. WebSockets are not limited.
+- **Wiring** (`main.py`): `app.state.limiter = limiter` and `app.add_middleware(SlowAPIMiddleware)`. The middleware applies the default **300/minute** to undecorated HTTP routes. It skips decorated routes (slowapi `_should_exempt`: the route is in `_route_limits`), and the decorator enforces their own limit. WebSockets are not limited.
+  - **Caveat: which routes get the default depends on the FastAPI version.** The middleware finds the handler by scanning `app.routes` for a full match that has an `endpoint`, and `_should_exempt` also exempts a request when it finds no handler.
+  - With the FastAPI in the backend venv (0.142.x), routers are mounted as `_IncludedRouter` objects without an `endpoint`. Every `/api/v1/*` route is therefore exempt, and the default is enforced only on `/health`, `/health/ready` and the docs routes. This was verified with `RATE_LIMIT_DEFAULT=2/minute`.
+  - With FastAPI versions that copy included routes into `app.routes` (`requirements.txt` allows `fastapi>=0.115,<1`), the default covers every undecorated HTTP route.
 - **Per-route limits** (only these routes are decorated; each one gets its own limit **instead of** the default):
 
 | Route | Limit |
@@ -3093,7 +3106,7 @@ Targeted validations that do exist:
 
 - `GET /api/v1/files/{key:path}` requires `CurrentUser` (`access` scope, cookie or Bearer).
 - The key is URL-decoded (`unquote`). If it does **not** start with `user_prefix(user.id) + "/"`, which is `users/<uuid>/`, or if it contains `..`, the endpoint returns **404** `"File not found"` (not 403).
-- With **S3** storage it returns a 302 redirect to `presigned_url(key, expires=300)`, valid for 5 minutes.
+- With **S3** storage it returns a 307 redirect (Starlette `RedirectResponse` default) to `presigned_url(key, expires=300)`, valid for 5 minutes. If the presigned URL comes back empty, it falls through to `storage.read(key)`.
 - With **local** storage it calls `storage.read(key)`; `FileNotFoundError` or `OSError` → 404. It returns the bytes with `media_type = mimetypes.guess_type(key)[0] or "application/octet-stream"` and `Cache-Control: private, max-age=300`.
 - Defence in depth: `_safe_key()` drops empty, `.` and `..` path segments and normalizes `\` to `/`. `LocalStorage._path()` resolves the path and raises `ValueError("Invalid storage key")` unless it lies under the storage root.
 - Account deletion calls `delete_prefix(users/<uuid>)`.
@@ -3669,7 +3682,7 @@ Shared helpers: `Row` (label + hint grid; directly labels `Input`, `Select`, `Sw
 - `Save mass-apply settings` → `PUT /users/me/preferences { preferences: { review_mode, resume_strategy, auto_submit_kept, trust_generated_answers, auto_keep_min_score, max_jobs_per_source, exclude_no_sponsorship, max_applications_per_day, internshala_share (?? 25), internshala_per_scan (?? 10), skip_suspicious_companies (?? true), scan_top_companies (?? true), sources: { internship_lists } } }`.
 
 **Preferences**:
-- "Internship focus" card (`FocusCard`; defaults `DEFAULT_FOCUS = { enabled: true, country: "India", prime_cities: ["Delhi", "New Delhi", "Delhi NCR", "Gurugram", "Noida"], country_share: 90 }`): `Internships only` (switch sets `job_types` to `["internship"]` and `experience_level` to `["internship"]`, or back to `["internship", "full-time"]`), `Season` (placeholder "Summer 2027", empty → null), `Focus on one country` (switch + country input disabled when off), `Share in {country}` (`Slider` 50–100 step 5, shows `%`), `Prime cities` (TagInput). `Save internship focus` (saves the whole preference object).
+- "Internship focus" card (`FocusCard`; defaults `DEFAULT_FOCUS = { enabled: true, country: "India", prime_cities: ["Delhi", "New Delhi", "Delhi NCR", "Gurugram", "Noida"], country_share: 90 }`): `Internships only` (switch sets `job_types` to `["internship"]` and `experience_level` to `["internship"]`; turning it off sets `job_types` back to `["internship", "full-time"]` and leaves `experience_level` unchanged), `Season` (placeholder "Summer 2027", empty → null), `Focus on one country` (switch + country input disabled when off), `Share in {country}` (`Slider` 50–100 step 5, shows `%`), `Prime cities` (TagInput). `Save internship focus` (saves the whole preference object).
 - "Search preferences" card: `Target roles`, `Tech focus` (`focus_skills`), `Skip these technologies` (`avoid_skills`), `Target locations` (TagInputs); `Work arrangement` select (`any` "Any", `remote` "Remote only", `hybrid` "Hybrid / remote OK", `onsite` "On-site"); `Internships only` (`internships_only`, default true) → when on shows `Year of study` (select `""` "Any year (don't check)", 1–5 "1st…5th year") and `Graduating in` (number 2000–2100, placeholder = estimated year from `GET /users/me/student` or "e.g. 2029", with source note " (from your resume)" / " (estimated)"); when off shows `Job types` pills (`full-time, part-time, internship, contract, freelance`); `Salary range` (min, max numbers; currency input uppercased); `Companies to avoid`, `Companies to target`, `Exclude titles containing` (TagInputs); `Match threshold` (native range 0–100 bound to **`auto_apply_threshold`**); `Max applications per day` (1–200); `Posted within (days)` (1–90); `Automatic scans` (switch `scan_enabled` + "every" `scan_interval_hours` 1–168 "hours"); `Cover letters` (`cover_letter_enabled`); `Resume PDF template` (`classic`/`modern`); `Timezone` (placeholder = browser tz). `Save preferences` → `PUT /users/me/preferences { preferences: <entire prefs object> }`.
 
 **Job sources** (`sourcesOnly`): `Platforms to scan` pills over `ALL_PLATFORMS = ["internshala", "internships", "greenhouse", "lever", "ashby", "workday", "linkedin", "indeed", "glassdoor", "wellfound", "generic"]`; TagInputs `Greenhouse boards`, `Lever companies`, `Ashby boards`, `Workday career sites`, `Company careers pages`, `Internshala searches` (`sources.internshala_urls`). `Save sources` → same full `PUT /users/me/preferences`.
@@ -3739,7 +3752,7 @@ Animations: `TabsContent` `animate-fade-in`; `Progress` transitions; Radix modal
 | PUT | `/users/me/field-mappings` | Settings |
 | DELETE | `/users/me/field-mappings/{field_name}` | Settings |
 | GET | `/users/me/student` | Settings › Preferences |
-| PUT | `/users/me/preferences` | Settings (5 forms), Swipe Review, `usePopups` |
+| PUT | `/users/me/preferences` | Settings (4 call sites behind 6 save buttons: mass apply, internship focus, preferences, job sources, notifications, Internshala), Swipe Review, `usePopups` |
 | POST | `/users/me/preferences/preset/{name}` | Settings › Mass apply |
 | PATCH | `/users/me` | Settings › Profile |
 | DELETE | `/users/me` (`{confirm: "DELETE"}`) | Settings › Privacy |
@@ -3822,7 +3835,7 @@ Paths relative to `frontend/src/`. `EASE_OUT = [0.22, 1, 0.36, 1]`. All Framer M
 - `Logo({ href = "/", className? })` — `Link` with `LogoMark` and wordmark `<span className="font-bold">Hire</span>Flow` (19px, tight tracking).
 - `TunnelGrid({ className?, animated = true })` — wire-frame "tunnel" SVG generated at module load: `RINGS = 17`, `RAILS = 44`, viewBox `600×900`, squircle exponent `n = 3.4`, ring scale `1/(1 + 0.21*i)`, radii `420*s × 610*s`, 96 points per ring, dots at every joint (`r = max(0.8, 3.2*s)`, opacity `min(1, 0.35 + s)`), radial fade `tunnel-fade` to background. When `animated`: group has `animate-tunnel-drift` (`motion-reduce:animate-none`, `transformBox: fill-box`). `preserveAspectRatio="xMidYMid slice"`.
 - `TagPile({ className? })` — absolutely positioned `.tag-pill`s (640×118 box): Internships (0,52,-58°), Greenhouse (50,12,-14°), Resume (64,70,0°), Cover letters (170,64,178°), Lever (212,18,31°), Ashby (296,4,12°), Startups (330,60,-12°), Workday (452,66,2°), Swipe right (450,-6,-24°), Gmail (560,34,58°).
-- `Seal({ className? })` — 24-point star polygon (radii 31/26) in primary + foreground center dot.
+- `Seal({ className? })` — star polygon with 24 vertices (alternating radii 31/26, i.e. 12 tips), stroked in primary (no fill, `strokeWidth 3`) + foreground center dot (r 4).
 - `BrushHeadline({ lines: string[]; className? })` — `h1.display`, first two lines inside `.brush` span (red strokes), remaining lines below; default size `text-[clamp(2.3rem,5.1vw,4.6rem)]`.
 
 #### 6.1.6 `company-badge.tsx` (client)
@@ -3879,7 +3892,7 @@ Paths relative to `frontend/src/`. `EASE_OUT = [0.22, 1, 0.36, 1]`. All Framer M
 - `MaybeAnimatedNumber({ value: ReactNode; className? })` — numbers animate; strings matching `/^(\d+)(%?)$/` animate preserving `%`; everything else rendered as is.
 
 #### 6.1.15 `notification-bell.tsx` (client)
-- `NotificationBell()` — `useNotifications()` (`/notifications?limit=30`, 30 s), `usePopups()`. Trigger: ghost icon button, `Bell` (or `BellOff` when pop-ups muted), unread count bubble (capped "9+"); aria-label "Notifications ({n} unread)[, pop-ups muted]"; title when muted "Pop-ups muted: notifications still collect here".
+- `NotificationBell()` — `useNotifications()` (`/notifications?limit=30`, 30 s), `usePopups()`. Trigger: ghost icon button, `Bell` (or `BellOff` when pop-ups muted), unread count bubble (capped "9+"); aria-label "Notifications[ ({n} unread)][, pop-ups muted]" (unread part only when n > 0); title when muted "Pop-ups muted: notifications still collect here".
 - Popover (align end, `w-[min(24rem,calc(100vw-2rem))]`): header "Notifications" with toggle `Mute pop-ups` / `Unmute` (`aria-pressed={!enabled}`, loading while saving, disabled until `/auth/me` loaded) and `Mark all read` → `POST /notifications/read-all` then `mutate()`. Muted banner: "Pop-ups are muted. New notifications still land here and in your other channels." List (`max-h-96`): each item is a `Link` to `n.link || "#"`; unread items tinted with a red dot; clicking closes the popover and, if unread, `POST /notifications/{id}/read` then `mutate()`; shows title, body (2-line clamp), `timeAgo(created_at)`. Empty: "You're all caught up."
 
 #### 6.1.16 `page-header.tsx`
@@ -4281,7 +4294,7 @@ Where tasks are dispatched from (`enqueue("<name>", ...)` call sites):
 | Beat entry name | Task | Schedule (exact) | Effective cadence |
 |---|---|---|---|
 | `scan-due-users` | `hireflow.scan_due_users` | `crontab(minute=7)` | hourly at :07 UTC |
-| `check-all-emails` | `hireflow.check_all_emails` | `max(60, settings.EMAIL_POLL_MINUTES * 60)` (seconds, float interval) | every 300 s by default |
+| `check-all-emails` | `hireflow.check_all_emails` | `max(60, settings.EMAIL_POLL_MINUTES * 60)` (seconds, plain `int` interval — `EMAIL_POLL_MINUTES` is an int) | every 300 s by default |
 | `renew-gmail-watches` | `hireflow.renew_gmail_watches` | `crontab(hour=3, minute=17)` | daily 03:17 UTC |
 | `interview-reminders` | `hireflow.send_interview_reminders` | `600.0` (seconds) | every 10 min |
 | `linkedin-sync` | `hireflow.linkedin_sync_all` | `crontab(hour=6, minute=23)` | daily 06:23 UTC |
@@ -4344,10 +4357,10 @@ these jobs enqueue (prepare / submit …) run in the same process's dispatch thr
 
 ## Section 9: Scraper Registry
 
-Source: `backend/app/scrapers/` — 15 modules: `__init__.py`, `base.py`, `ats_detect.py`,
+Source: `backend/app/scrapers/` — 16 files (15 modules + `__init__.py`): `__init__.py`, `base.py`, `ats_detect.py`,
 `browser_scraper.py`, `ashby.py`, `generic.py`, `glassdoor.py`, `greenhouse.py`, `indeed.py`,
 `internshala.py`, `internships.py`, `lever.py`, `linkedin.py`, `top_companies.py`, `wellfound.py`,
-`workday.py` (16 files incl. `__init__`). **12 registered scrapers.**
+`workday.py`. **12 registered scrapers.**
 
 ### 9.1 Registry and dispatch (`scrapers/__init__.py`)
 
@@ -4475,11 +4488,11 @@ Fallbacks: URL containing `gh_jid=` → GREENHOUSE; any other host → CUSTOM; e
 | `WellfoundScraper` (`wellfound`) | `WELLFOUND` | **Browser** | `https://wellfound.com/role/r/{role-slug}` or `/role/l/{role-slug}/{location-slug}`; job URL `https://wellfound.com/jobs/{id}-{slug}` | — | none | `query.limit` / `time_up()` | Default keyword `"software engineer"`; walks `__NEXT_DATA__` Apollo state joining `JobListing` with `Startup`; `easy_apply=True`; intern jobType → INTERNSHIP. |
 | `GenericScraper` (`generic`) | `CUSTOM` (or detected ATS) | HTTP HTML | any career page URL | `career_pages` | none | follows ≤ **15** job-looking links, depth 1 | schema.org `JobPosting` JSON-LD (also `@graph`, `ItemList`); else delegates to ATS boards found in the page (`find_ats_boards`: Greenhouse, Lever, Ashby, Workday regexes) via their scrapers; else follows links matching `/(jobs?\|careers?\|positions?\|openings?)/...` whose text matches the title. `company_from_page` (og:site_name / application-name) → `company_from_host` (strips www/careers/jobs/apply/boards/hire/recruiting/talent/work prefixes, handles `.co.uk`). `fetch_job` falls back to `<h1>/<title>` + main text (≤ 20 000 chars). |
 | `InternshipListScraper` (`github`) | detected ATS or `CUSTOM` | HTTP JSON | `LISTS`: `simplify-internships` → `https://raw.githubusercontent.com/SimplifyJobs/Summer2027-Internships/dev/.github/scripts/listings.json`; `vanshb03-internships` → `.../vanshb03/Summer2027-Internships/dev/.github/scripts/listings.json`; `simplify-new-grad` → `.../SimplifyJobs/New-Grad-Positions/dev/.github/scripts/listings.json` (any https URL also accepted) | `internship_lists` (default `DEFAULT_LISTS = ["simplify-internships", "vanshb03-internships"]` when the key is absent) | none | in-process cache **30 min** (`CACHE_SECONDS`), thread-locked | Keeps `active` and `is_visible`; newest first; `clean_url` drops `utm_*` and `ref=Simplify`; dedupe by URL; description synthesised from locations / terms / category / degrees / sponsorship; new-grad lists → FULL_TIME + ENTRY, else INTERNSHIP; raw `listing_source` (later used by `enrich_job` to fetch the real JD). |
-| `InternshalaScraper` (`internshala`) | `CUSTOM` | **HTTP first, browser fallback** (`requires_browser = False`; subclass of `BrowserScraper`) | `https://internshala.com/internships/{category}-internship-in-{city}/`, `/internships/work-from-home-{category}-internships/`, `/internships/{category}-internship/`; user URLs first | `internshala_urls` | none for scraping (the synced Internshala session is only used by the apply bot) | `MAX_PAGES = 12` pages per scan (~40 cards each); ≤ 4 categories; ≤ 2 cities (default `delhi`); stops collecting at `limit × 2` cards; then `cap_internshala` (Section 9.7) | `CATEGORY_RULES` map roles → slugs (full-stack, backend, front-end, android/mobile, ML/AI, data science/analytics, python-django, java, web, cloud, cyber-security, software/computer-science, product-management, ui-ux-design, marketing, finance); default `software-development, computer-science`; `city_slug` aliases new-delhi/delhi-ncr→delhi, gurugram→gurgaon, bengaluru→bangalore. Search pages fetched in parallel over HTTP; 403/503/block markers → those pages re-fetched one at a time in one browser session. Title filter skipped (pages are category-scoped). Every job: INTERNSHIP, location `"..., India"`, raw `{"listing_source": "internshala", "apply_on_site": "Internshala", stipend, duration, starts_immediately}`; external id `internshala-{id}`. Errors: `"Internshala blocked the request and no browser is available: ..."`, `"Internshala could not be reached"`. |
+| `InternshalaScraper` (`internshala`) | `CUSTOM` | **HTTP first, browser fallback** (`requires_browser = False`; subclass of `BrowserScraper`) | `https://internshala.com/internships/{category}-internship-in-{city}/`, `/internships/work-from-home-{category}-internships/`, `/internships/{category}-internship/`; user URLs first | `internshala_urls` | none for scraping (the synced Internshala session is only used by the apply bot) | `MAX_PAGES = 12` pages per scan (~40 cards each); ≤ 4 categories; ≤ 2 cities (default `delhi`); stops collecting at `limit × 2` cards; the scan then applies `cap_internshala` (Section 9.6, `services/source_mix.py`) | `CATEGORY_RULES` map roles → slugs (full-stack, backend, front-end, android/mobile, ML/AI, data science/analytics, python-django, java, web, cloud, cyber-security, software/computer-science, product-management, ui-ux-design, marketing, finance); default `software-development, computer-science`; `city_slug` aliases new-delhi/delhi-ncr→delhi, gurugram→gurgaon, bengaluru→bangalore. Search pages fetched in parallel over HTTP; 403/503/block markers → those pages re-fetched one at a time in one browser session. Title filter skipped (pages are category-scoped). Every job: INTERNSHIP, location `"..., India"`, raw `{"listing_source": "internshala", "apply_on_site": "Internshala", stipend, duration, starts_immediately}`; external id `internshala-{id}`. Errors: `"Internshala blocked the request and no browser is available: ..."`, `"Internshala could not be reached"`. |
 | `TopCompaniesScraper` (`top_companies`) | `CUSTOM` (jobs carry their board's platform) | HTTP (delegates) | runs `tasks()` = for every `CATALOG` company: `greenhouse\|token\|name`, `lever\|...`, `ashby\|...`, `workday\|site_url\|name`, and `linkedin\|\|name` for companies hiring via own site | — (catalog-driven) | none | `LINKEDIN_PER_COMPANY = 8` (one results page); all tasks in parallel via `map_sources`; returns up to `max(query.limit, 150)` | Keeps only intern titles (`is_internship`) after `filter`; LinkedIn results kept only when `match_company(job.company_name)` is that company (search term `"<name> intern"`, `job_types=["internship"]`); Workday searched with `keywords=["intern"]`; raw gains `top_company`, `company_tier`; `fetch_job` returns `None`. |
 
 Requests per platform are additionally budgeted by `services/rate_limiter.PLATFORM_LIMITS`
-(requests/hour) — see Section 10.4.
+(requests/hour) — see Section 10.6 (`rate_limiter.py`).
 
 ### 9.6 Scan pipeline services that consume scrapers
 
@@ -4618,7 +4631,7 @@ All 32 service modules are listed in Sections 9.6 and here (`__init__.py` is emp
 
 | Module | Purpose | Public functions / classes / constants |
 |---|---|---|
-| `llm.py` | LLM access layer: Anthropic (primary; structured outputs, effort, server-side refusal fallback), OpenAI (secondary), Ollama (free). `LLM_PROVIDER` picks order (`auto` = Anthropic → OpenAI → Ollama, whichever configured). Retry: 3 attempts, 1 s / 2 s / 4 s backoff (`LLM_MAX_RETRIES`), then next provider; no provider → `LLMUnavailable` and services fall back to heuristics. | `JSON_RULE`, `REFUSAL_FALLBACK_BETA = "server-side-fallback-2026-07-01"`, `LLMError`, `LLMUnavailable`, `LLMRefusal`, `load_prompt`, `render_prompt`, `system_prompt`, `extract_json`, `scrub_credentials`, `public_url`, `Provider` protocol, `AnthropicProvider` (streaming `messages.stream` / `beta.messages.stream(betas=[...], fallbacks="default")`, `output_config.effort` + `format: json_schema`, `max_tokens` default `ANTHROPIC_MAX_TOKENS`, disables unsupported features on the fly, truncation → error), `OpenAIProvider` (`{OPENAI_BASE_URL}/chat/completions`, `response_format: json_object`, max_tokens ≤ 16 000), `OllamaProvider` (`/api/chat`, JSON-schema `format`, `num_ctx`, `keep_alive`, `think`, one repair round, `fill_defaults`, prompt fitting to context, `ollama_slots` semaphore = `OLLAMA_CONCURRENCY`), `OllamaError`, `CHARS_PER_TOKEN = 4`, `OLLAMA_MAX_PREDICT = 4096`, `estimate_tokens`, `compact_json_blocks`, `fit_prompt`, `ollama_schema`, `schema_shape`, `shape_problems`, `fill_defaults`, `ollama_headers` (Bearer `OLLAMA_API_KEY` only to `OLLAMA_BASE_URL`), `ollama_error_text`, `ollama_slots`, `configured_providers`, `LLMClient` (`available`, `provider_names`, `primary`, `model_of`, `complete_json`, `complete_json_traced`), `get_llm`, `set_llm`, `active_model`, `llm_budget`. |
+| `llm.py` | LLM access layer: Anthropic (primary; structured outputs, effort, server-side refusal fallback), OpenAI (secondary), Ollama (free). `LLM_PROVIDER` picks order (`auto` = Anthropic → OpenAI → Ollama, whichever configured). Retry (`_call_with_retries`, retryable errors only; refusals never retried): up to `LLM_MAX_RETRIES` attempts (default 3) with delays `[1, 2, 4][:LLM_MAX_RETRIES - 1]` — i.e. 1 s then 2 s by default — then next provider; no provider → `LLMUnavailable` and services fall back to heuristics. | `JSON_RULE`, `REFUSAL_FALLBACK_BETA = "server-side-fallback-2026-07-01"`, `LLMError`, `LLMUnavailable`, `LLMRefusal`, `load_prompt`, `render_prompt`, `system_prompt`, `extract_json`, `scrub_credentials`, `public_url`, `Provider` protocol, `AnthropicProvider` (streaming `messages.stream` / `beta.messages.stream(betas=[...], fallbacks="default")`, `output_config.effort` + `format: json_schema`, `max_tokens` default `ANTHROPIC_MAX_TOKENS`, disables unsupported features on the fly, truncation → error), `OpenAIProvider` (`{OPENAI_BASE_URL}/chat/completions`, `response_format: json_object`, max_tokens ≤ 16 000), `OllamaProvider` (`/api/chat`, JSON-schema `format`, `num_ctx`, `keep_alive`, `think`, one repair round, `fill_defaults`, prompt fitting to context, `ollama_slots` semaphore = `OLLAMA_CONCURRENCY`), `OllamaError`, `CHARS_PER_TOKEN = 4`, `OLLAMA_MAX_PREDICT = 4096`, `estimate_tokens`, `compact_json_blocks`, `fit_prompt`, `ollama_schema`, `schema_shape`, `shape_problems`, `fill_defaults`, `ollama_headers` (Bearer `OLLAMA_API_KEY` only to `OLLAMA_BASE_URL`), `ollama_error_text`, `ollama_slots`, `configured_providers`, `LLMClient` (`available`, `provider_names`, `primary`, `model_of`, `complete_json`, `complete_json_traced`), `get_llm`, `set_llm`, `active_model`, `llm_budget`. |
 | `llm_schemas.py` | JSON schemas for structured outputs (strict objects, all keys required). | helpers `obj`, `arr`, `enum`; `STR/INT/NUM/BOOL/STR_LIST`; `RESUME_SCHEMA`, `JOB_EVALUATION_SCHEMA`, `TAILORED_RESUME_SCHEMA`, `COVER_LETTER_SCHEMA`, `CUSTOM_ANSWERS_SCHEMA`, `EMAIL_INTENT_SCHEMA`, `INTERVIEW_PREP_SCHEMA`, `FORM_MAPPING_SCHEMA`, `LINKEDIN_DIFF_SCHEMA`, `CONNECTION_TEST_SCHEMA`. |
 | `ai_setup.py` | AI model status, connection test and Ollama model downloads for Settings › Integrations. | `PROBE_TIMEOUT_SECONDS = 2.0`, `DETECT_TIMEOUT_SECONDS = 0.5`, `PULL_READ_TIMEOUT_SECONDS = 600.0`, `PULL_KEY = "hireflow:ollama-pull:{model}"` (Redis), `PULL_TTL_SECONDS = 86400`, `PullError`, `normalize_model`, `ollama_status` (`/api/version`, `/api/tags`), `llm_section`, `hint_for`, `connection_test` (prompt `connection_test`, max_tokens 256), `pull_progress`, `start_pull` (background `POST /api/pull` stream). |
 | `resume_parser.py` | Master resume ingestion PDF/DOCX/TXT/MD → text → structured JSON (LLM, heuristic fallback). | `SUPPORTED_EXTENSIONS = (".pdf", ".docx", ".txt", ".md")`, `ResumeParseError`, `extract_text(filename, data)` (PDF positioned-line rebuild, link URIs), `parse_resume_text(text)` → (resume, `"llm"`/`"heuristic"`), `heuristic_parse`, `resume_to_text`, section aliases, education-table rows. Prompt `resume_parser`, effort low. |
@@ -4781,7 +4794,7 @@ Event listeners:
 Runs on `https://www.linkedin.com/*` at `document_idle`. Looks for the signed-in member's profile link
 (`a.global-nav__primary-link-me-menu-trigger[href*='/in/']`,
 `a[data-control-name='identity_welcome_message'][href*='/in/']`, `.feed-identity-module a[href*='/in/']`)
-and sends `{type: "profile-url", url}`; if not found, retries every 1500 ms, up to 10 attempts. Never reads
+and sends `{type: "profile-url", url}`; if not found, retries every 1500 ms until found or `attempts > 10` (i.e. up to 11 retries after the first try). Never reads
 messages or other page content.
 
 ### 12.4 `popup.html` / `popup.js`
@@ -5191,7 +5204,7 @@ Legend for **.env.example**: `yes` = active line; `commented` = present as a `# 
 | 29 | `OPENAI_API_KEY` | str \| None | `None` | Enables OpenAI provider + OpenAI embeddings | yes (empty) |
 | 30 | `OPENAI_MODEL` | str | `"gpt-4o"` | OpenAI chat model | yes |
 | 31 | `OPENAI_BASE_URL` | str | `"https://api.openai.com/v1"` | Chat-completions + embeddings base URL | — |
-| 32 | `LLM_MAX_RETRIES` | int | `3` | Attempts per provider (backoff 1/2/4 s) | — |
+| 32 | `LLM_MAX_RETRIES` | int | `3` | Attempts per provider for retryable errors (delays `[1, 2, 4][:n-1]` s → 1 s, 2 s with the default) | — |
 | 33 | `LLM_TIMEOUT_SECONDS` | float | `300.0` | Anthropic/OpenAI request timeout | — |
 | 34 | `LLM_PROVIDER` | str | `"auto"` | Provider order (`auto \| anthropic \| openai \| ollama`) → `llm_provider` | yes (empty = auto) |
 | 35 | `OLLAMA_BASE_URL` | str | `"http://localhost:11434"` | Ollama server / Ollama Cloud → `ollama_base_url` | yes (empty) |
@@ -5426,7 +5439,7 @@ The raw-SQL indexes are not dropped explicitly; they go away with their tables. 
 
 None of 0002–0006 creates enums or extensions or migrates data. On PostgreSQL, `batch_alter_table` (default `recreate="auto"`) emits plain `ALTER TABLE` statements.
 
-The offline SQL for the whole chain (`alembic upgrade head --sql`) ends with `UPDATE alembic_version SET version_num='0006'`.
+In the offline SQL for the whole chain (`alembic upgrade head --sql`), the last statement before `COMMIT;` is `UPDATE alembic_version SET version_num='0006' WHERE alembic_version.version_num = '0005'`.
 
 ### 15.7 `backend/alembic/env.py`
 
@@ -5472,9 +5485,9 @@ version_path_separator = os
   - The PKs and the named and unnamed unique constraints.
   - All 23 ORM indexes, including `idx_jobs_company_tier` and `idx_jobs_company_verdict`.
   - The 4 raw-SQL indexes: `idx_jobs_embedding` (ivfflat, `vector_cosine_ops`, `lists = 100`), `idx_jobs_active` (partial), `idx_jobs_title_trgm` (GIN `gin_trgm_ops`) and `idx_comms_action_required` (partial).
-- Its `downgrade()` drops it all: every index, every table in FK-safe reverse order, and the 7 enum types (`DROP TYPE IF EXISTS`). Like the source, it may leave the `vector` and `pg_trgm` extensions installed.
+- Its `downgrade()` drops it all: every ORM index (the 2 company indexes are dropped just before the other `jobs` indexes), every table in FK-safe reverse order, and the 7 enum types (`DROP TYPE IF EXISTS`). The 4 raw-SQL indexes are not dropped explicitly; they go away with their tables, as in the source. Like the source, it may leave the `vector` and `pg_trgm` extensions installed.
 - On an empty PostgreSQL 16 + pgvector database, **`alembic upgrade head` followed by `alembic check` must report no drift** ("No new upgrade operations detected"). The CI cycle `upgrade head → check → downgrade base → upgrade head` must also pass. `env.py` (with `MANUAL_INDEXES`/`include_object`, `compare_type=True`, `render_as_batch` on SQLite and `NullPool`), `alembic.ini` and `script.py.mako` are carried over unchanged.
-- The resulting schema is identical to the one the source chain `0001…0006` produces. The columns from 0002–0006 are appended to each table in the order the source ALTERs added them. **Verified:** `pg_dump --schema-only` of the two databases matches line for line (877 lines; only `pg_dump`'s random `\restrict` token differs).
+- The resulting schema is identical to the one the source chain `0001…0006` produces. The columns from 0002–0006 are appended to each table in the order the source ALTERs added them. **Verified:** `pg_dump --schema-only` of the two databases matches line for line (877 lines with `--no-owner` and the `alembic_version` table left out; only `pg_dump`'s random `\restrict` token differs). Re-checked in QA on fresh databases: the dumps are identical, `alembic check` reports no drift, and the CI cycle `upgrade head → check → downgrade base → upgrade head` passes.
 - **Adopting an existing AutoApply AI PostgreSQL database:** a database created by the source chain carries `alembic_version = '0006'`, a revision that does not exist in HireFlow. `alembic upgrade head` (which the `api` role runs on start) fails with "Can't locate revision identified by '0006'". Its schema is already identical, so re-stamp it once with `cd backend && alembic stamp --purge 0001`. **Verified:** after the stamp, `alembic current` reports `0001 (head)`, `upgrade head` is a no-op and `alembic check` reports no drift. SQLite installs (`./start.sh`) don't use Alembic (`create_all`), so an old `backend/data/autoapply.db` can be renamed to `backend/data/hireflow.db`. For either database, applications that were logged without a link store the old placeholder URL. HireFlow hides only `MANUAL_URL_PREFIX = "https://manual.hireflow.invalid/"`, so rewrite the old prefix once, or those placeholders will show as job links: `UPDATE jobs SET source_url = replace(source_url, 'https://manual.autoapply.invalid/', 'https://manual.hireflow.invalid/') WHERE source_url LIKE 'https://manual.autoapply.invalid/%';`. Everything else carries over:
   - Encrypted columns stay readable as long as the same `SECRET_KEY` / `ENCRYPTION_KEY` are kept.
   - Users sign in once more, because the cookie is now `hireflow_session`.
@@ -5546,7 +5559,7 @@ Jan 2022–Present, Beta Labs intern, UC Berkeley B.S. CS 2017–2021, project J
 | `test_e2e_pipeline.py` | 3 | 3 | module `pytestmark = pytest.mark.e2e`; each `skipif` no Chromium | Full pipeline against a local mock company site + ATS (`fixtures/mock_ats/apply.html`): scan → match → tailor → fill in Chromium → approval → submit; swipe keep then auto-submit; swipe keep stops for eligibility questions. |
 | `test_form_filling.py` | 5 | 5 | 1 × `e2e` (+ skipif) | Real-browser Indian internship form (tricky fields), `choose_option` wording matches, dates/numbers/length limits, resume facts answering education/location questions, ambiguous dates following the box format. |
 | `test_intern_level.py` | 13 | 43 | 2 × `parametrize` | Intern titles only, internship job type without "intern" in the title, eligibility for a 2nd-year student, graduation years, graduation year source (you → resume → estimate), full-time search untouched, scrapers keep internships only, Internshala allowance, known postings don't count, scan keeps ten Internshala + interns only, full-time cards skipped, student settings, presets keep internships only (except new-grad). |
-| `test_internshala_apply.py` | 40 | 48 | 12 × `e2e`, 5 × `parametrize`, `needs_browser` skipif | Internshala bot against a local mock of Internshala (easy-apply modal, Quill editor, availability radios, custom questions, resume interstitial, external/closed/already-applied listings, login redirect, profile gate): staging then submit, review corrections sent, notice-period "Other", logged-out/sign-up detection, presenting the synced browser's UA, unanswered required never submitted, session probe, cookie conversion, cover-letter/availability helpers, session-sync API never returns cookie values, preferences, blocker logic, staging/short-circuit while bot off, re-staging when turned on, session expiry flag, auto-submit pref, daily limit, expired session back to review, already-applied tracking, external listing waiting, keep→prepare→review→submit, disconnect stickiness, "Apply with the bot" (one click, missing-reason messages, Internshala-only), refused login tried once, one browser per account, renewed cookies kept/stored, only verified companies auto-applied, marking a company legit releases waiting applications. |
+| `test_internshala_apply.py` | 40 | 48 | 12 × `e2e` (15 collected items), 5 × `parametrize`, `needs_browser` skipif | Internshala bot against a local mock of Internshala (easy-apply modal, Quill editor, availability radios, custom questions, resume interstitial, external/closed/already-applied listings, login redirect, profile gate): staging then submit, review corrections sent, notice-period "Other", logged-out/sign-up detection, presenting the synced browser's UA, unanswered required never submitted, session probe, cookie conversion, cover-letter/availability helpers, session-sync API never returns cookie values, preferences, blocker logic, staging/short-circuit while bot off, re-staging when turned on, session expiry flag, auto-submit pref, daily limit, expired session back to review, already-applied tracking, external listing waiting, keep→prepare→review→submit, disconnect stickiness, "Apply with the bot" (one click, missing-reason messages, Internshala-only), refused login tried once, one browser per account, renewed cookies kept/stored, only verified companies auto-applied, marking a company legit releases waiting applications. |
 | `test_internshala_check.py` | 2 | 3 | 1 × `e2e`, `parametrize("accepted", [True, False])`, skipif | `scripts/internshala_check.py`: reports what Internshala does with the synced login (names only); message when nothing is synced. |
 | `test_llm.py` | 10 | 19 | `parametrize` over every `*_SCHEMA` in `llm_schemas` | `extract_json` variants, `render_prompt` substitution, system prompt contains the directives, fallback to second provider, refusal moves on, unavailable without providers, retry policy, schemas strict, Anthropic request shape and refusal handling. |
 | `test_location_focus.py` | 14 | 14 | — | Default India internship targeting, location tiers, Delhi-first location score, ~90 % India per scan, search query uses focus, season rules + matching filter, review queue Delhi→India ordering, India preset + validation, India job-board domains, Internshala parser (`internshala_search.html`), search URLs, end-to-end search, Internshala jobs ask you to apply yourself. |
@@ -5623,4 +5636,17 @@ Phase 6 results for the HireFlow tree, run on 4 Oct 2026 against AutoApply AI `8
 | 12 | Compose | `docker compose config -q` (dev + prod) | Valid. Projects: `hireflow` (postgres, redis, api, worker, beat, frontend + `ollama` profile) and `hireflow-prod` (+ caddy). |
 | 13 | Shell scripts | `bash -n` / `sh -n` on `start.sh`, `scripts/*.sh`, `docker-entrypoint.sh` | All parse. |
 | 14 | Running app | `uvicorn` + `next start` on SQLite with seeded demo data, driven by Playwright | Landing, login, overview, swipe review, application detail, settings and analytics all render with HireFlow branding. Live updates connect. |
-| 15 | Spec cross-check | QA agent checks every endpoint, table/column, route, component, task, scraper, submitter, prompt, script and setting in this document against the HireFlow tree | See the QA report below. |
+| 15 | Spec cross-check (QA) | Two QA agents checked every item in Sections 1–16 against the HireFlow tree: registered routes enumerated from `app.routes`, `Base.metadata` compared column by column, the live `Settings` model, Celery config, `pytest --collect-only`, `find`/`grep` counts, and a 46-case TestClient smoke run | **PASS, no code gaps.** 102 endpoints (98 app + 4 FastAPI docs) match in both directions. 10 tables / 199 columns / 14 FKs / 27 indexes. 22 route files. 24 components + 26 ui primitives + 4 hooks. 16 Celery tasks + 9 beat entries. 12 registered scrapers. 6 submitters. 11 prompts. 89 settings. 20 test files / 219 test functions / 280 collected tests. 36 small wording/detail corrections were applied to this document. |
+| 16 | GitHub Actions CI | `ci.yml` on the pushed branch | All four jobs green: extension; dashboard lint/typecheck/build; backend ruff, bandit, migration cycle, SQLite tests and PostgreSQL + pgvector tests with browser end-to-end; Docker images + smoke test. |
+
+### Pre-existing behaviour carried over unchanged
+
+These were found during verification. They behave the same in AutoApply AI `8fe0747`, and the migration preserves them as they are rather than fixing them.
+
+- **Global rate limit:** with FastAPI 0.142.x (allowed by `fastapi>=0.115,<1`), SlowAPI's default `RATE_LIMIT_DEFAULT` (300/minute) is applied only to `/health`, `/health/ready` and the docs routes. It does not apply to `/api/v1/*` routes, because they are mounted as included routers. Per-route decorator limits (e.g. auth `5/minute`) work.
+  - A 429 from the default limit returns `{"error": …}`; decorator limits return `{"detail": …}`.
+  - The limiter key uses Python's per-process `hash()`, so each API worker counts separately.
+- `GET /api/v1/applications?status=` (empty value) returns no items.
+- Unused settings: `APP_NAME`, `DEBUG`, `SCAN_INTERVAL_HOURS`.
+- The `postgres` pytest marker is declared but never applied.
+- `{max_applications_per_day}` in `prompts/master_system.txt` is never substituted.
