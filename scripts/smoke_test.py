@@ -96,7 +96,9 @@ def main() -> int:
         checks = (_json(body) or {}).get("checks", {})
         run.check("database reachable", status == 200 and checks.get("database") == "ok", json.dumps(checks))
         if api.startswith("https://"):
-            run.check("Redis connected", checks.get("redis") == "ok", str(checks.get("redis")))
+            # A single-container deployment (docs/DEPLOY.md, free hosting) has no Redis on purpose
+            redis = str(checks.get("redis"))
+            run.check("Redis connected (or not used)", redis == "ok" or redis.startswith("not used"), redis)
             status, headers, _ = http.request("GET", f"{api}/health")
             run.check("HSTS", "strict-transport-security" in headers, "no Strict-Transport-Security header")
 
