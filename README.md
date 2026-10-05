@@ -127,6 +127,19 @@ best results.
 
 More: [running and self-hosting](docs/SELF_HOSTING.md) · [AI models](docs/AI_MODELS.md).
 
+### Free AI with Ollama
+
+[Ollama](https://ollama.com) runs open AI models on your own computer, free and private, with no API key:
+
+1. Install it from https://ollama.com/download (Mac: open the app once; Linux:
+   `curl -fsSL https://ollama.com/install.sh | sh`).
+2. Run `./start.sh --ollama`. It downloads the default model (`qwen3.5:4b`, about 3.4 GB) once and adds
+   `LLM_PROVIDER=ollama` and `OLLAMA_MODEL=qwen3.5:4b` to `.env`.
+3. In the dashboard, open **Settings › Integrations › AI model** and press **Test AI**.
+
+Choosing a model for your RAM, Docker, servers, Ollama Cloud, the deployed demo and troubleshooting:
+**[docs/OLLAMA.md](docs/OLLAMA.md)**.
+
 ## Guardrails
 
 Applying for someone is only useful if it never embarrasses them. These are enforced by the server, not just
@@ -189,6 +202,7 @@ CI runs all of it plus migrations, security audits and Docker builds: [docs/TEST
 ## Docs
 
 [User guide](docs/USER_GUIDE.md) · [Architecture](docs/ARCHITECTURE.md) · [AI models](docs/AI_MODELS.md) ·
+[Free AI with Ollama](docs/OLLAMA.md) ·
 [Self-hosting](docs/SELF_HOSTING.md) · [Deploying the demo](docs/DEPLOY.md) · [Testing](docs/TESTING.md) ·
 [Security and responsible use](docs/SECURITY.md) · [The plan](docs/HIREFLOW_PLAN.md)
 
