@@ -241,6 +241,7 @@ setup_ollama() {  # --ollama: make sure Ollama runs here, the model is downloade
 if [ "$MODE" = "stop" ]; then
   banner
   docker compose down && ok "Docker stack stopped"
+  docker compose -p hireflow-demo down >/dev/null 2>&1 || true  # the demo stack (./start.sh --docker --demo), if any
   exit 0
 fi
 
@@ -253,15 +254,20 @@ if [ "$MODE" = "docker" ]; then
     setup_ollama  # the containers reach this computer's Ollama at host.docker.internal
   fi
   say "Building and starting the stack (first build takes a few minutes)…"
-  if [ "$DEMO" = 1 ]; then export DEMO_MODE=true; fi
-  docker compose up --build -d
+  COMPOSE="docker compose"
+  if [ "$DEMO" = 1 ]; then
+    # Its own project and database volume: the demo's nightly reset deletes every account in its database
+    export DEMO_MODE=true
+    COMPOSE="docker compose -p hireflow-demo"
+  fi
+  $COMPOSE up --build -d || die "Could not start the stack. Another HireFlow stack may be using the ports: ./start.sh --stop"
   if [ "$SAMPLE" = 1 ]; then
     wait_for "http://127.0.0.1:$API_PORT/health" 180 "API" || die "API did not start — see: docker compose logs api"
-    docker compose exec -T api python scripts/seed_db.py || true
+    $COMPOSE exec -T api python scripts/seed_db.py || true
   fi
   wait_for "http://127.0.0.1:$WEB_PORT/" 240 "Dashboard" || die "Dashboard did not start — see: docker compose logs frontend"
   printf '\n  %s\n  %s\n  %s\n\n' "${BOLD}Dashboard${RESET_C}  http://localhost:$WEB_PORT" \
-    "${BOLD}API docs${RESET_C}   http://localhost:$API_PORT/docs" "${DIM}Stop with ./start.sh --stop · logs: docker compose logs -f${RESET_C}"
+    "${BOLD}API docs${RESET_C}   http://localhost:$API_PORT/docs" "${DIM}Stop with ./start.sh --stop · logs: $COMPOSE logs -f${RESET_C}"
   open_url "http://localhost:$WEB_PORT"
   exit 0
 fi
@@ -302,6 +308,9 @@ fi
 REQ_HASH="$(hash_of backend/requirements.txt backend/requirements-dev.txt)"
 if [ "$(cat "$VENV/.req-hash" 2>/dev/null || true)" != "$REQ_HASH" ]; then
   say "Installing backend dependencies (first run takes a couple of minutes)…"
+  # A virtualenv made by another tool (uv, for one) may have no pip: add it
+  "$PY" -m pip --version >/dev/null 2>&1 || "$PY" -m ensurepip --upgrade >/dev/null 2>&1 \
+    || die "backend/.venv has no pip. Delete backend/.venv and run ./start.sh again."
   "$PY" -m pip install -q -U pip >/dev/null
   "$PY" -m pip install -q -r backend/requirements-dev.txt
   echo "$REQ_HASH" > "$VENV/.req-hash"
@@ -327,8 +336,11 @@ if [ ! -d frontend/node_modules ] || [ "$(cat frontend/node_modules/.lock-hash 2
 fi
 
 # Runtime configuration for local mode (overrides .env for this run only)
-export DATABASE_URL="${LOCAL_DATABASE_URL:-sqlite:///$ROOT/backend/data/hireflow.db}"
-export LOCAL_STORAGE_PATH="$ROOT/backend/data/storage"
+# The demo uses its own database: its nightly reset deletes every account in it (never your real one)
+DB_NAME="hireflow"; STORAGE_DIR="storage"
+if [ "$DEMO" = 1 ]; then DB_NAME="hireflow-demo"; STORAGE_DIR="demo-storage"; fi
+export DATABASE_URL="${LOCAL_DATABASE_URL:-sqlite:///$ROOT/backend/data/$DB_NAME.db}"
+export LOCAL_STORAGE_PATH="$ROOT/backend/data/$STORAGE_DIR"
 export FRONTEND_URL="http://localhost:$WEB_PORT"
 export PUBLIC_API_URL="http://localhost:$API_PORT"
 export CORS_ORIGINS="http://localhost:$WEB_PORT,http://127.0.0.1:$WEB_PORT"
@@ -339,7 +351,7 @@ export PYTHONUNBUFFERED=1
 if [ -n "$OLLAMA_URL_FOR_RUN" ]; then export OLLAMA_BASE_URL="$OLLAMA_URL_FOR_RUN"; fi
 
 if [ "$RESET" = 1 ]; then
-  rm -f "$ROOT"/backend/data/hireflow.db "$ROOT"/backend/data/hireflow.db-*
+  rm -f "$ROOT/backend/data/$DB_NAME.db" "$ROOT/backend/data/$DB_NAME.db-"*
   warn "Local database wiped"
 fi
 
@@ -386,12 +398,12 @@ fi
 
 say "Preparing the database…"
 "$PY" scripts/migrate.py >"$LOG_DIR/migrate.log" 2>&1 || { cat "$LOG_DIR/migrate.log"; die "Database migration failed"; }
-ok "Database ready ($( [ "${DATABASE_URL#sqlite}" != "$DATABASE_URL" ] && echo "SQLite: backend/data/hireflow.db" || echo "$DATABASE_URL"))"
-if [ "${DATABASE_URL#sqlite}" != "$DATABASE_URL" ]; then
+ok "Database ready ($( [ "${DATABASE_URL#sqlite}" != "$DATABASE_URL" ] && echo "SQLite: backend/data/$DB_NAME.db" || echo "$DATABASE_URL"))"
+if [ "${DATABASE_URL#sqlite}" != "$DATABASE_URL" ] && [ "$DEMO" != 1 ]; then
   # Each copy of the project has its own database: say whose accounts this one holds.
   ACCOUNTS="$("$PY" -c 'import sqlite3,sys
 try: print(sqlite3.connect(sys.argv[1]).execute("select count(*) from users").fetchone()[0])
-except Exception: print(0)' "$ROOT/backend/data/hireflow.db" 2>/dev/null || echo 0)"
+except Exception: print(0)' "$ROOT/backend/data/$DB_NAME.db" 2>/dev/null || echo 0)"
   if [ "${ACCOUNTS:-0}" = 0 ]; then
     warn "No accounts in this copy's database yet. Sign up at /register, or if you had one, find it with:"
     warn "  $PY scripts/account.py where"
@@ -438,8 +450,13 @@ printf '  %s   %s\n' "${BOLD}API docs${RESET_C}" "http://localhost:$API_PORT/doc
 [ "$SAMPLE" = 1 ] && printf '  %s  %s\n' "${BOLD}Sample site${RESET_C}" "http://localhost:$DEMO_PORT/careers"
 printf '  %s     %s\n' "${BOLD}Queue${RESET_C}" "$QUEUE_NOTE"
 printf '  %s      %s\n\n' "${BOLD}Logs${RESET_C}" "logs/*.log"
-printf '%s\n' "${DIM}  First time? Create your account → upload your resume → Settings › Mass apply › Internships"
-printf '%s\n\n' "  preset → save your visa / work-authorization answers → Scan → swipe. Ctrl-C stops everything.${RESET_C}"
+if [ "$DEMO" = 1 ]; then
+  printf '%s\n' "${DIM}  Open the dashboard and press \"Try the demo\": swipe right to keep a job, then see it filled in"
+  printf '%s\n\n' "  Ready to submit. Nothing is really sent. Ctrl-C stops everything.${RESET_C}"
+else
+  printf '%s\n' "${DIM}  First time? Create your account → upload your resume → Settings › Mass apply › Internships"
+  printf '%s\n\n' "  preset → save your visa / work-authorization answers → Scan → swipe. Ctrl-C stops everything.${RESET_C}"
+fi
 open_url "http://localhost:$WEB_PORT"
 
 # Stream the logs until Ctrl-C (or a service dies).

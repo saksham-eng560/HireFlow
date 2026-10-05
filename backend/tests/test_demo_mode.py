@@ -175,3 +175,15 @@ def test_the_reset_does_nothing_outside_the_demo(auth_client: TestClient) -> Non
     assert reset_demo_data() == {"reset": False}
     with SessionLocal() as db:
         assert db.query(User).count() == 1
+
+
+def test_the_demo_fills_its_own_site_without_human_pacing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Typing and mouse pacing protect real accounts on real sites; the demo's own careers site needs none, and a
+    visitor shouldn't wait a minute for a form (README: "a few seconds later the kept job is in Ready to submit")."""
+    from app.automation import human
+
+    monkeypatch.setattr(settings, "HUMAN_EMULATION", True)
+    monkeypatch.setattr(settings, "DEMO_MODE", False)
+    assert human._enabled()
+    monkeypatch.setattr(settings, "DEMO_MODE", True)
+    assert not human._enabled()

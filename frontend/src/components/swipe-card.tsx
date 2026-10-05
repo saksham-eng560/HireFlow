@@ -63,6 +63,7 @@ export const SwipeCard = forwardRef<SwipeCardHandle, {
   const salary = formatSalary(job.salary_min, job.salary_max, job.salary_currency);
   const score = card.match_score;
   const shortDescription = (job.description || "").length < 400 && !!job.listing_source;
+  const seasonShown = card.focus?.season === "match" ? card.focus.season_label?.toLowerCase() : undefined;
 
   return (
     <motion.article
@@ -119,7 +120,8 @@ export const SwipeCard = forwardRef<SwipeCardHandle, {
         <div className="flex flex-wrap gap-1.5">
           <FocusBadges card={card} />
           {job.job_type && <Badge tone="outline">{titleCase(job.job_type)}</Badge>}
-          {job.terms?.map((t) => <Badge key={t} tone="outline"><CalendarDays className="h-3 w-3" />{t}</Badge>)}
+          {job.terms?.filter((t) => !seasonShown || t.toLowerCase() !== seasonShown)  // not twice: the season badge shows it
+            .map((t) => <Badge key={t} tone="outline"><CalendarDays className="h-3 w-3" />{t}</Badge>)}
           {salary && <Badge tone="outline">{salary}</Badge>}
           {job.sponsorship && job.sponsorship !== "Other" && <Badge tone={sponsorshipTone(job.sponsorship)}>{job.sponsorship}</Badge>}
         </div>

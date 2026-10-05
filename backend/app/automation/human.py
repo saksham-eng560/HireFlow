@@ -11,7 +11,8 @@ from app.config import settings
 
 
 def _enabled() -> bool:
-    return settings.HUMAN_EMULATION
+    # The demo only ever fills HireFlow's own demo careers site: nobody to look human to, and visitors wait for it
+    return settings.HUMAN_EMULATION and not settings.DEMO_MODE
 
 
 def pause(min_s: float, max_s: float) -> None:
