@@ -247,6 +247,12 @@ def load_sample_profile(user: CurrentUser, db: DB) -> dict:
     """Demo mode only: fill every step with a sample candidate so you can click straight through."""
     if not settings.DEMO_MODE:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
+    apply_sample_profile(db, user)
+    return onboarding_state(db, user)
+
+
+def apply_sample_profile(db: Session, user: User) -> None:
+    """Fill every onboarding step with the sample candidate (also used to seed the demo account)."""
     sample = demo.SAMPLE_PROFILE
     _apply_step(db, user, 1, {"full_name": user.full_name or "Sam Rivera", **sample["welcome"]})
     if get_master_resume(db, user) is None:
@@ -255,4 +261,3 @@ def load_sample_profile(user: CurrentUser, db: DB) -> dict:
         _apply_step(db, user, step, sample[key])
     user.onboarding_step = max(user.onboarding_step or 1, LAST_STEP - 1)
     db.flush()
-    return onboarding_state(db, user)

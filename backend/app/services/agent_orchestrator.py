@@ -291,6 +291,8 @@ def _consent_needed(db: Session, user: User, skipped: list[str], run: RunLog) ->
 
 def scan_platforms(prefs: dict[str, Any], requested: list[str] | None = None) -> list[str]:
     """The sources a scan searches: the ones you asked for, or your saved ones plus the top companies."""
+    if settings.DEMO_MODE:  # the public demo searches only the bundled demo careers site
+        return ["demo"]
     chosen = list(requested or prefs.get("platforms") or list(SCRAPERS))
     if not requested and prefs.get("scan_top_companies", True) and "top_companies" in SCRAPERS \
             and "top_companies" not in chosen:
@@ -1424,6 +1426,11 @@ def stage_application(db: Session, application_id: str, run: RunLog | None = Non
         if app.status == ApplicationStatus.PREPARING:
             app.notes = PAUSED_NOTE
         return app
+    if (reason := demo_blocker(app)) is not None:
+        app.needs_manual_review, app.manual_review_reason = True, reason
+        app.auto_submit = False
+        _mark_ready(db, user, app)
+        return app
     internshala = is_internshala_job(app.job)
     site = (app.job.raw_data or {}).get("apply_on_site") or ("Internshala" if internshala else None)
     # Boards like Internshala only take applications from your own logged-in account (the opt-in
@@ -1542,6 +1549,16 @@ def mark_self_applied(db: Session, user: User, app: Application, applied_on: dat
     return True
 
 
+def demo_blocker(app: Application) -> str | None:
+    """The public demo only ever opens or sends to the bundled demo careers site."""
+    if not settings.DEMO_MODE:
+        return None
+    url = app.job.application_url or app.job.source_url or ""
+    if url.startswith(settings.demo_site_url + "/"):
+        return None
+    return "Demo: HireFlow only applies to the bundled demo careers site here, so this one isn't opened or sent."
+
+
 def _replace_file(app: Application, attr: str, key: str) -> None:
     """Point ``attr`` at a newly stored file and delete the one it replaces."""
     old = getattr(app, attr)
@@ -1601,6 +1618,10 @@ def submit_application(db: Session, application_id: str) -> Application:
         guardrails.hold(app, datetime.now(UTC), "Paused: this is sent when you resume")
         return app
     if not guardrails.due(app):  # in "Sending soon" or held by a limit: the sweep sends it when it's due
+        return app
+    if (reason := demo_blocker(app)) is not None:
+        app.needs_manual_review, app.manual_review_reason = True, reason
+        set_status(db, app, ApplicationStatus.PENDING_APPROVAL, "system", "Demo: not sent")
         return app
     if not _within_limits(db, user, app):
         return app

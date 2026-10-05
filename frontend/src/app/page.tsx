@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowUpRight, Check, Play, ShieldCheck, X } from "lucide-react";
 import { BrushHeadline, Logo, Seal, TagPile, TunnelGrid } from "@/components/brand";
+import { TryDemoButton } from "@/components/demo";
 import { LEGAL_LINKS } from "@/components/legal-page";
 import { PipelineMotion } from "@/components/motion-graphics";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -52,6 +53,7 @@ export default function Landing() {
             </p>
             <div className="mt-10 flex flex-wrap items-center gap-8">
               <Link href="/register" className={buttonVariants({ size: "xl" })}>Start swiping</Link>
+              <TryDemoButton size="xl" />
               <a href="#how" className="group inline-flex items-center gap-4">
                 <span className="flex h-14 w-14 items-center justify-center rounded-full border border-foreground/60 transition-colors group-hover:border-primary group-hover:bg-primary">
                   <Play className="h-5 w-5 translate-x-0.5 fill-current" />

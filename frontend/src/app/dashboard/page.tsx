@@ -11,6 +11,7 @@ import { TunnelGrid } from "@/components/brand";
 import { LinksBanner } from "@/components/links-banner";
 import { FocusStrip } from "@/components/motion-graphics";
 import { ScanProgressPanel } from "@/components/scan-progress";
+import { useAuthConfig } from "@/components/demo";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -28,6 +29,7 @@ function Onboarding() {
   const { data: status } = useAgentStatus();
   const { data: integrations } = useIntegrations();
   const { data: answers } = useSWR<{ mappings: FieldMapping[] }>("/users/me/field-mappings", fetcher);
+  const { data: config } = useAuthConfig();
   if (!me || !status) return null;
   const prefs = me.preferences;
   const hasSources = Object.values(prefs.sources || {}).some((v) => (v || []).length) ||
@@ -40,7 +42,9 @@ function Onboarding() {
       label: "Apply the Internships preset (mass apply)", href: "/dashboard/settings?tab=mass-apply" },
     { done: saved.has("work_authorization") && saved.has("requires_sponsorship"),
       label: "Save work-authorization & visa answers", href: "/dashboard/settings?tab=answers" },
-    { done: !!integrations?.google.connected, label: "Connect Gmail & Calendar (optional)", href: "/dashboard/settings?tab=integrations" },
+    // Google can't be connected in the demo, so it isn't asked for there
+    ...(config?.demo_mode ? [] : [{ done: !!integrations?.google.connected, label: "Connect Gmail & Calendar (optional)",
+      href: "/dashboard/settings?tab=integrations" }]),
   ];
   const completed = steps.filter((s) => s.done).length;
   if (completed === steps.length) return null;
@@ -54,7 +58,8 @@ function Onboarding() {
         <span className="font-mono font-bold tracking-tight text-3xl tabular-nums text-primary">{Math.round((completed / steps.length) * 100)}%</span>
       </CardHeader>
       <div className="px-5"><Progress value={(completed / steps.length) * 100} /></div>
-      <CardContent className="mt-4 grid gap-px bg-border p-0 sm:grid-cols-2 sm:[&>:last-child]:col-span-2 xl:grid-cols-5 xl:[&>:last-child]:col-span-1">
+      <CardContent className={cn("mt-4 grid gap-px bg-border p-0 sm:grid-cols-2",
+        steps.length % 2 ? "sm:[&>:last-child]:col-span-2 xl:grid-cols-5 xl:[&>:last-child]:col-span-1" : "xl:grid-cols-4")}>
         {steps.map((s, i) => (
           <Link key={s.label} href={s.href} className="group flex items-start gap-3 bg-card p-4 text-sm transition-colors hover:bg-accent">
             {s.done ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> : <Circle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />}

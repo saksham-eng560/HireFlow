@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy import func, select
 
-from app.api.deps import DB, CurrentUser, limiter
+from app.api.deps import DB, CurrentUser, NotInDemo, limiter
 from app.api.serializers import user_out
 from app.config import settings
 from app.core.security import TokenError, create_token, hash_password, verify_password
@@ -42,6 +42,7 @@ def auth_config() -> dict:
         "llm_providers": llm.provider_names,
         "llm_model": active_model(llm),
         "environment": settings.ENVIRONMENT,
+        "demo_mode": settings.DEMO_MODE,
     }
 
 
@@ -53,8 +54,11 @@ def register(request: Request, body: RegisterRequest, response: Response, db: DB
     email = body.email.lower()
     if db.scalar(select(User).where(func.lower(User.email) == email)):
         raise HTTPException(status.HTTP_409_CONFLICT, "An account with this email already exists")
+    prefs = default_preferences()
+    if settings.DEMO_MODE:
+        prefs["dry_run"] = True  # the demo: forms are filled and screenshotted, nothing is sent
     user = User(email=email, full_name=body.full_name.strip(), hashed_password=hash_password(body.password),
-                preferences=default_preferences())
+                preferences=prefs)
     db.add(user)
     db.flush()
     token = _set_session(response, user)
@@ -73,6 +77,19 @@ def login(request: Request, body: LoginRequest, response: Response, db: DB) -> d
     return {"user": user_out(user), "access_token": token}
 
 
+@router.post("/demo")
+@limiter.limit(settings.RATE_LIMIT_REGISTER)
+def try_the_demo(request: Request, response: Response, db: DB) -> dict:
+    """"Try the demo": one click signs you in to the shared demo account (re-created every night)."""
+    if not settings.DEMO_MODE:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
+    from app.services.demo_seed import ensure_demo_account
+
+    user = ensure_demo_account(db)
+    token = _set_session(response, user)
+    return {"user": user_out(user), "access_token": token}
+
+
 @router.post("/logout")
 def logout(response: Response) -> dict:
     response.delete_cookie(settings.COOKIE_NAME, path="/")
@@ -84,7 +101,7 @@ def me(user: CurrentUser) -> dict:
     return user_out(user)
 
 
-@router.post("/password")
+@router.post("/password", dependencies=[NotInDemo])
 def change_password(body: PasswordChange, user: CurrentUser) -> dict:
     if user.hashed_password and not verify_password(body.current_password or "", user.hashed_password):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Current password is incorrect")
@@ -98,7 +115,7 @@ def ws_token(user: CurrentUser) -> dict:
     return {"token": create_token(str(user.id), scope="ws", expires_delta=timedelta(minutes=5))}
 
 
-@router.post("/extension-token")
+@router.post("/extension-token", dependencies=[NotInDemo])
 def extension_token(user: CurrentUser) -> dict:
     """Long-lived, limited-scope token for the Chrome extension (LinkedIn and Internshala session sync)."""
     token = create_token(str(user.id), scope="extension", expires_delta=timedelta(days=settings.EXTENSION_TOKEN_EXPIRE_DAYS))
@@ -106,7 +123,7 @@ def extension_token(user: CurrentUser) -> dict:
 
 
 # --------------------------------------------------------------------------- Google OAuth
-@router.get("/google/login")
+@router.get("/google/login", dependencies=[NotInDemo])
 def google_login(next: str | None = None) -> RedirectResponse:
     try:
         return RedirectResponse(google_oauth.build_auth_url("login", redirect_after=next or "/dashboard"))
@@ -118,7 +135,7 @@ def google_login(next: str | None = None) -> RedirectResponse:
 CONNECT_RETURN_PATHS = ("/dashboard/settings", "/onboarding")
 
 
-@router.get("/google/connect")
+@router.get("/google/connect", dependencies=[NotInDemo])
 def google_connect(user: CurrentUser, next: str = "/dashboard/settings") -> dict:
     redirect_after = next if next in CONNECT_RETURN_PATHS else "/dashboard/settings"
     try:
@@ -132,7 +149,7 @@ def _frontend(path: str, **params: str) -> str:
     return f"{settings.FRONTEND_URL.rstrip('/')}{path}{query}"
 
 
-@router.get("/google/callback")
+@router.get("/google/callback", dependencies=[NotInDemo])
 def google_callback(db: DB, code: str | None = None, state: str | None = None, error: str | None = None) -> RedirectResponse:
     if error or not code or not state:
         return RedirectResponse(_frontend("/login", error=error or "google_oauth_failed"))

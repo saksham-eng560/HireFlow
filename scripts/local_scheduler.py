@@ -28,6 +28,7 @@ log = logging.getLogger("scheduler")
 SCHEDULE: list[tuple[str, int, bool]] = [
     ("scan_due_users", 60 * 60, True),
     ("send_due_applications", 60, True),  # "Sending soon" and limit-held applications, once they're due
+    ("reset_demo", 24 * 3600, False),  # the public demo's nightly reset (does nothing unless DEMO_MODE)
     ("check_all_emails", max(60, settings.EMAIL_POLL_MINUTES * 60), False),
     ("send_interview_reminders", 10 * 60, False),
     ("renew_gmail_watches", 24 * 3600, False),

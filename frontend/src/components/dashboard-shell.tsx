@@ -10,6 +10,7 @@ import {
   Send, Settings, type LucideIcon,
 } from "lucide-react";
 import { Logo } from "@/components/brand";
+import { DemoBanner } from "@/components/demo";
 import { NotificationBell } from "@/components/notification-bell";
 import { PausedBanner, PauseButton } from "@/components/pause-control";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -267,6 +268,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             </DropdownMenuContent>
           </DropdownMenu>
         </header>
+        <DemoBanner />
         <PausedBanner status={status} />
         <main className="flex-1 p-4 sm:p-6 lg:p-10">{children}</main>
       </div>

@@ -6,6 +6,7 @@ from app.models.enums import ATSPlatform
 from app.scrapers.ashby import AshbyScraper
 from app.scrapers.ats_detect import detect_ats_platform, parse_ats_url
 from app.scrapers.base import BaseScraper, RateLimited, ScrapedJob, ScraperError, SearchQuery
+from app.scrapers.demo import DemoScraper
 from app.scrapers.generic import GenericScraper
 from app.scrapers.glassdoor import GlassdoorScraper
 from app.scrapers.greenhouse import GreenhouseScraper
@@ -31,6 +32,7 @@ SCRAPERS: dict[str, type[BaseScraper]] = {
     "glassdoor": GlassdoorScraper,
     "wellfound": WellfoundScraper,
     "generic": GenericScraper,
+    "demo": DemoScraper,  # the bundled demo careers site (DEMO_MODE)
 }
 
 PLATFORM_TO_SCRAPER = {

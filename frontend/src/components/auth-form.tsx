@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import useSWR from "swr";
 import { ArrowUpRight } from "lucide-react";
 import { BrushHeadline, Logo, TunnelGrid } from "@/components/brand";
+import { TryDemoButton, useAuthConfig } from "@/components/demo";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ApiError, fetcher, post } from "@/lib/api-client";
+import { ApiError, post } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 const ERRORS: Record<string, string> = {
@@ -27,7 +27,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const [fullName, setFullName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const { data: config } = useSWR<{ google_enabled: boolean; registration_enabled: boolean }>("/auth/config", fetcher);
+  const { data: config } = useAuthConfig();
 
   useEffect(() => {
     const e = params.get("error");
@@ -97,6 +97,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
               <Button type="submit" size="lg" className="w-full" loading={loading}>
                 {mode === "login" ? "Sign in" : "Create account"} <ArrowUpRight />
               </Button>
+              <TryDemoButton className="w-full [&>button]:w-full" label="Or try the demo, no sign-up" />
               {mode === "register" && (
                 <p className="text-center text-xs text-muted-foreground">
                   By creating an account you agree to the <Link href="/terms" className="font-semibold text-primary hover:underline">terms</Link> and{" "}

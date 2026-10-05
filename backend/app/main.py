@@ -15,7 +15,21 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy import text
 
-from app.api import agent, analytics, applications, auth, communications, files, interviews, jobs, onboarding, resumes, review, users
+from app.api import (
+    agent,
+    analytics,
+    applications,
+    auth,
+    communications,
+    demo_site,
+    files,
+    interviews,
+    jobs,
+    onboarding,
+    resumes,
+    review,
+    users,
+)
 from app.api.deps import default_rate_limit, extract_token, limiter
 from app.config import settings
 from app.core.database import create_all, engine, wait_for_db
@@ -30,6 +44,17 @@ configure_logging()
 logger = logging.getLogger(__name__)
 
 
+def _ensure_demo_account() -> None:
+    from app.core.database import session_scope
+    from app.services.demo_seed import ensure_demo_account
+
+    try:
+        with session_scope() as db:
+            ensure_demo_account(db)
+    except Exception:  # never keep the API from starting; "Try the demo" seeds it on first use instead
+        logger.exception("Could not create the demo account at start-up")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings.require_production_ready()  # no default SECRET_KEY, no missing ENCRYPTION_KEY, cookies over HTTPS only
@@ -37,6 +62,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if settings.is_sqlite:
         # Zero-setup local mode: create tables directly (PostgreSQL uses Alembic migrations).
         await asyncio.to_thread(create_all)
+    if settings.DEMO_MODE:  # "Try the demo" needs its account from the first request on
+        await asyncio.to_thread(_ensure_demo_account)
     manager.bind_loop(asyncio.get_running_loop())
     await manager.start_subscriber()
     llm = get_llm()
@@ -122,7 +149,7 @@ async def security_headers(request: Request, call_next):  # type: ignore[no-unty
 
 
 for router in (auth.router, onboarding.router, users.router, resumes.router, jobs.router, applications.router, agent.router,
-               communications.router, interviews.router, analytics.router, review.router, files.router):
+               communications.router, interviews.router, analytics.router, review.router, files.router, demo_site.router):
     app.include_router(router, prefix=settings.API_PREFIX)
 
 

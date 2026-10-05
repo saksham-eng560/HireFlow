@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     # Public demo: nothing real is sent (dry-run submissions to the demo careers site, no job-site logins, no Gmail
     # sending), a one-click demo account, and "Load sample profile" in onboarding. See docs/HIREFLOW_PLAN.md §5.5.
     DEMO_MODE: bool = False
+    # The shared account behind "Try the demo" (re-created every night) and where the bundled demo careers site
+    # is reached from the worker's browser (default: {PUBLIC_API_URL}{API_PREFIX}/demo-careers)
+    DEMO_ACCOUNT_EMAIL: str = "demo@hireflow.app"
+    DEMO_SITE_URL: str = ""
 
     # ---- Security ----
     SECRET_KEY: str = DEFAULT_SECRET
@@ -280,6 +284,10 @@ class Settings(BaseSettings):
         problems = self.validate_for_production()
         if problems:
             raise RuntimeError("Refusing to start in production:\n  - " + "\n  - ".join(problems))
+
+    @property
+    def demo_site_url(self) -> str:
+        return (self.DEMO_SITE_URL or f"{self.PUBLIC_API_URL.rstrip('/')}{self.API_PREFIX}/demo-careers").rstrip("/")
 
     @property
     def trusted_origins(self) -> set[str]:

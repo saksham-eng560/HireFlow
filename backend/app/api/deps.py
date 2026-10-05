@@ -49,6 +49,15 @@ def default_rate_limit(request: HTTPConnection) -> None:
 DB = Annotated[Session, Depends(get_db)]
 
 
+def not_in_demo() -> None:
+    """For endpoints that touch the real world (logins to other sites, Google, e-mail, passwords): off in the demo."""
+    if settings.DEMO_MODE:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not available in the demo: nothing real is connected or sent here")
+
+
+NotInDemo = Depends(not_in_demo)
+
+
 def extract_token(request: Request) -> str | None:
     auth = request.headers.get("authorization")
     if auth and auth.lower().startswith("bearer "):

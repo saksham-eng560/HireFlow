@@ -16,6 +16,7 @@ import { Progress } from "@/components/ui/progress";
 import { Select } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { DemoNotice } from "@/components/demo";
 import { GatedSources } from "@/components/gated-sources";
 import { cleanProfiles, ProfileLinksEditor, profileErrors } from "@/components/onboarding/profile-links";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -801,6 +802,7 @@ function IntegrationsPanel() {
 
   return (
     <div className="space-y-6">
+      <DemoNotice>In the demo, Google, the Chrome extension, job-site logins and webhooks are turned off: nothing real is connected or sent.</DemoNotice>
       <AIModelCard integ={integ} refresh={mutate} />
 
       <Card>

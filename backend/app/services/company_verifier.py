@@ -23,6 +23,7 @@ from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlparse
 
+from app.config import settings
 from app.models.enums import ATSPlatform
 from app.services.company_catalog import TIERS, Company, by_board, match_company, normalize_company, owns_url
 
@@ -114,6 +115,8 @@ def check_company(company_name: str, description: str, *, platform: Any = None, 
     """The rules: instant, no network. ``trusted`` = companies you marked legit."""
     urls = [u for u in (urls or []) if u]
     raw = raw or {}
+    if raw.get("demo") and settings.DEMO_MODE and all(u.startswith(settings.demo_site_url) for u in urls):
+        return CompanyCheck(VERIFIED, 90, ["A fictional company on the bundled demo careers site"], method="demo")
     text = f"{description or ''}\n{raw.get('stipend') or ''}"
     hard = _flags(text, HARD_FLAGS)
     soft = _flags(text, SOFT_FLAGS)

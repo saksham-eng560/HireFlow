@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from sqlalchemy import select
 
-from app.api.deps import DB, CurrentUser, ExtensionUser, limiter
+from app.api.deps import DB, CurrentUser, ExtensionUser, NotInDemo, limiter
 from app.api.serializers import user_out
 from app.automation.browser import BrowserUnavailable
 from app.automation.proxy import proxy_manager
@@ -28,6 +28,7 @@ from app.schemas.user import (
 from app.services import agent_orchestrator as orch
 from app.services import intern_level, sources
 from app.services.ai_setup import PullError, connection_test, llm_section, pull_progress, start_pull
+from app.services.demo_seed import is_demo_account
 from app.services.google_oauth import has_scope
 from app.services.location_focus import get_season
 from app.services.presets import apply_preset, clamp_daily_cap
@@ -158,6 +159,11 @@ def update_preferences(body: PreferencesUpdate, user: CurrentUser, db: DB) -> di
             sources.require_consent(user, [p for p in body.preferences["platforms"] or [] if p not in before])
         except sources.ConsentRequired as exc:
             raise HTTPException(422, str(exc)) from exc
+    if settings.DEMO_MODE:  # nothing in the demo signs in to a real site or posts to a webhook
+        blocked = [k for k in ("internshala_bot_enabled", "discord_webhook_url", "slack_webhook_url")
+                   if body.preferences.get(k)]
+        if blocked:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, f"Not available in the demo: {', '.join(blocked)}")
     prefs = merge_preferences(user.preferences, body.preferences)
     if "max_applications_per_day" not in body.preferences:
         prefs = clamp_daily_cap(prefs)  # a cap saved before the ceiling existed doesn't block other changes
@@ -173,7 +179,7 @@ def update_preferences(body: PreferencesUpdate, user: CurrentUser, db: DB) -> di
     return prefs
 
 
-@router.post("/progress-report")
+@router.post("/progress-report", dependencies=[NotInDemo])
 def progress_report(user: CurrentUser, db: DB) -> dict:
     """Send the progress digest now (Gmail + dashboard + Discord/Slack), covering the last 7 days."""
     return {"sent": send_progress_now(db, user, days=7)}
@@ -269,7 +275,7 @@ def delete_field_mapping(field_name: str, user: CurrentUser, db: DB) -> dict:
     return {"ok": True}
 
 
-@router.put("/ats-credentials")
+@router.put("/ats-credentials", dependencies=[NotInDemo])
 def update_ats_credentials(body: ATSCredentialsUpdate, user: CurrentUser) -> dict:
     creds = dict(user.ats_credentials or {})
     creds.update({k: v for k, v in body.credentials.items() if v})
@@ -322,7 +328,7 @@ def test_llm(request: Request, user: CurrentUser) -> dict:
     return connection_test()
 
 
-@router.post("/integrations/ollama/pull", status_code=202)
+@router.post("/integrations/ollama/pull", status_code=202, dependencies=[NotInDemo])
 @limiter.limit("10/minute")
 def pull_ollama_model(request: Request, user: CurrentUser) -> dict:
     """Start downloading OLLAMA_MODEL into Ollama in the background."""
@@ -338,7 +344,7 @@ def ollama_pull_progress(user: CurrentUser) -> dict:
     return pull_progress()
 
 
-@router.post("/integrations/linkedin-cookie")
+@router.post("/integrations/linkedin-cookie", dependencies=[NotInDemo])
 def sync_linkedin_cookie(body: LinkedInCookieIn, user: ExtensionUser) -> dict:
     user.linkedin_session_cookie = body.li_at.strip()
     user.linkedin_cookie_updated_at = datetime.now(UTC)
@@ -359,7 +365,7 @@ def disconnect_linkedin(user: CurrentUser) -> dict:
     return {"ok": True}
 
 
-@router.post("/integrations/linkedin/sync", status_code=202)
+@router.post("/integrations/linkedin/sync", status_code=202, dependencies=[NotInDemo])
 def trigger_linkedin_sync(user: CurrentUser, db: DB) -> dict:
     if not user.linkedin_session_cookie:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "LinkedIn session not synced yet")
@@ -373,7 +379,7 @@ USER_AGENT = re.compile(r"Mozilla/5\.0 [\x20-\x7e]{10,500}")  # a browser's navi
 MAX_INTERNSHALA_SESSION_CHARS = 32_000
 
 
-@router.post("/integrations/internshala-session")
+@router.post("/integrations/internshala-session", dependencies=[NotInDemo])
 def sync_internshala_session(body: InternshalaSessionIn, user: ExtensionUser, db: DB) -> dict:
     """The extension sends your internshala.com cookies (httpOnly ones included); stored encrypted."""
     now = datetime.now(UTC)
@@ -431,7 +437,7 @@ def disconnect_internshala(user: CurrentUser) -> dict:
     return {"ok": True}
 
 
-@router.post("/integrations/internshala/check")
+@router.post("/integrations/internshala/check", dependencies=[NotInDemo])
 def check_internshala_session(user: CurrentUser, db: DB) -> dict:
     """Open Internshala with your synced login in a real browser and see whether it's still signed in."""
     if not user.internshala_session:
@@ -473,6 +479,8 @@ def export_data_zip(user: CurrentUser, db: DB) -> Response:
 def delete_account(body: DeleteAccountRequest, user: CurrentUser, db: DB, response: Response) -> dict:
     if body.confirm != "DELETE":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Type DELETE to confirm")
+    if is_demo_account(user):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "The shared demo account can't be deleted (it's reset every night)")
     delete_user_data(db, user)
     response.delete_cookie(settings.COOKIE_NAME, path="/")
     return {"deleted": True}

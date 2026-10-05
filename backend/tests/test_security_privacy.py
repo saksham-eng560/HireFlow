@@ -126,7 +126,8 @@ def test_upload_endpoint(auth_client: TestClient) -> None:
         from app.models.resume import Resume
 
         stored = db.query(Resume).one().original_file_url
-    assert stored.endswith(".pdf") and "evil" not in stored and stored.startswith(user_prefix(db.query(User).one().id))
+        owner = db.query(User).one().id  # inside the session: a query after it closes leaves a transaction open
+    assert stored.endswith(".pdf") and "evil" not in stored and stored.startswith(user_prefix(owner))
     assert key is None or key == stored
     renamed = auth_client.post("/api/v1/resumes/upload", files={"file": ("resume.pdf", _docx(), "application/pdf")})
     assert renamed.status_code == 422 and "Rename it to .docx" in renamed.json()["detail"]
