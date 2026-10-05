@@ -78,7 +78,7 @@ def login(request: Request, body: LoginRequest, response: Response, db: DB) -> d
 
 
 @router.post("/demo")
-@limiter.limit(settings.RATE_LIMIT_REGISTER)
+@limiter.limit(settings.RATE_LIMIT_DEMO)
 def try_the_demo(request: Request, response: Response, db: DB) -> dict:
     """"Try the demo": one click signs you in to the shared demo account (re-created every night)."""
     if not settings.DEMO_MODE:

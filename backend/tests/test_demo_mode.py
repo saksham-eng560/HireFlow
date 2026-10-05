@@ -187,3 +187,19 @@ def test_the_demo_fills_its_own_site_without_human_pacing(monkeypatch: pytest.Mo
     assert human._enabled()
     monkeypatch.setattr(settings, "DEMO_MODE", True)
     assert not human._enabled()
+
+
+def test_a_room_sharing_one_ip_can_all_try_the_demo(client: TestClient, demo: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    """It signs in to the shared account and creates nothing, so it isn't limited like sign-up (5 a minute): a class
+    or an office behind one address, or the e2e suite, gets in; a flood still doesn't."""
+    from app.api.deps import limiter
+
+    monkeypatch.setattr(limiter, "enabled", True)
+    codes = []
+    try:
+        for _ in range(21):
+            client.cookies.clear()  # a different visitor each time: a fresh browser, same address
+            codes.append(client.post("/api/v1/auth/demo").status_code)
+        assert codes == [200] * 20 + [429]
+    finally:
+        limiter.reset()

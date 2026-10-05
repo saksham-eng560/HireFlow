@@ -155,10 +155,28 @@ def test_stricter_limits_on_sign_in_sign_up_uploads_and_scans() -> None:
     limits = {name.rsplit(".", 1)[-1]: {str(lim.limit) for lim in route} for name, route in limiter._route_limits.items()}
     assert limits["login"] == {"10 per 1 minute", "60 per 1 hour"}
     assert limits["register"] == {"5 per 1 minute", "30 per 1 hour"}
+    assert limits["try_the_demo"] == {"20 per 1 minute", "200 per 1 hour"}  # signs in to the shared account, creates nothing
     for endpoint in ("upload_resume", "create_from_text"):
         assert limits[endpoint] == {"10 per 1 minute", "60 per 1 hour"}
     for endpoint in ("start_scan", "complete_onboarding"):
         assert limits[endpoint] == {"6 per 1 minute", "40 per 1 hour"}
+
+
+def test_a_made_up_cookie_does_not_get_round_the_limit(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The limit's bucket is the address (and a signed-in user's id), never the raw cookie: a different invented
+    session cookie on every attempt is still the same client."""
+    from app.api.deps import limiter
+
+    monkeypatch.setattr(limiter, "enabled", True)
+    try:
+        login = {"email": "nobody@example.com", "password": "wrong-password"}
+        codes = []
+        for attempt in range(11):
+            client.cookies.set(settings.COOKIE_NAME, f"made-up-{attempt}")
+            codes.append(client.post("/api/v1/auth/login", json=login).status_code)
+        assert codes == [401] * 10 + [429]
+    finally:
+        limiter.reset()
 
 
 def test_login_is_rate_limited(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:

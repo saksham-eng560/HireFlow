@@ -78,6 +78,7 @@ class Settings(BaseSettings):
     # Stricter limits where abuse costs the most (per client): signing in, signing up, uploads, scans
     RATE_LIMIT_LOGIN: str = "10/minute;60/hour"
     RATE_LIMIT_REGISTER: str = "5/minute;30/hour"
+    RATE_LIMIT_DEMO: str = "20/minute;200/hour"  # "Try the demo" creates nothing; a class or office may share one IP
     RATE_LIMIT_UPLOAD: str = "10/minute;60/hour"
     RATE_LIMIT_SCAN: str = "6/minute;40/hour"
 
