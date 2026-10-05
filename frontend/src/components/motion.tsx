@@ -2,18 +2,19 @@
 
 /**
  * Motion primitives shared by the dashboard: route transitions, staggered reveals and counters.
- * Everything honours "reduce motion" (MotionConfig reducedMotion="user" + useReducedMotion).
+ * Everything honours "reduce motion" (MotionConfig reducedMotion="user" + useReducedMotionSafe).
  */
 
 import { useEffect, useRef, useState } from "react";
-import { animate, motion, useInView, useReducedMotion, type Variants } from "framer-motion";
+import { animate, motion, useInView, type Variants } from "framer-motion";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";
 
 export const EASE_OUT = [0.22, 1, 0.36, 1] as const;
 
 /** Content fades and rises in on every route change (used by app/**\/template.tsx). */
 export function PageTransition({ children, className }: { children: React.ReactNode; className?: string }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   return (
     <>
       <RouteSweep />
@@ -31,7 +32,7 @@ export function PageTransition({ children, className }: { children: React.ReactN
 
 /** A thin signal-red bar that sweeps across the top of the window when a page opens. */
 export function RouteSweep() {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   if (reduce) return null;
   return (
     <motion.span
@@ -60,7 +61,7 @@ type ItemTag = "div" | "li" | "article";
 export function Stagger({ children, className, delay = 0, as = "div" }: {
   children: React.ReactNode; className?: string; delay?: number; as?: Tag;
 }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   const Component = motion[as];
   return (
     <Component className={className} variants={container} custom={delay} initial={reduce ? false : "hidden"} animate="show">
@@ -81,7 +82,7 @@ export function AnimatedNumber({ value, format = (n) => n.toLocaleString(), clas
 }) {
   const ref = useRef<HTMLSpanElement>(null);
   const inView = useInView(ref, { once: true, margin: "-40px" });
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   const from = useRef(0);
   const [text, setText] = useState(() => format(0));
 

@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
 import { ArrowRight, Crosshair } from "lucide-react";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion";
 import type { Preferences } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -19,7 +20,7 @@ const LOOP = 7.5; // seconds for a chip to cross the whole pipeline
  * lights up as a card passes it. Static (cards resting at stations) when "reduce motion" is on.
  */
 export function PipelineMotion({ className }: { className?: string }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   const gap = LOOP / CHIPS.length;
   return (
     <div className={cn("relative", className)} aria-label="Scan, swipe, tailor and fill, apply, track: the agent's pipeline" role="img">
@@ -68,7 +69,7 @@ export function PipelineMotion({ className }: { className?: string }) {
 
 /** Overview strip: what the agent is hunting for right now, with a live "radar" dot. */
 export function FocusStrip({ prefs }: { prefs: Preferences }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   const focus = prefs.location_focus;
   const on = focus && focus.enabled !== false && focus.country;
   const first = focus?.prime_cities?.[0];

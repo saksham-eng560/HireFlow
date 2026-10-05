@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, ArrowRight, Check, CircleSlash, Clock, Layers, Loader2, Radar, Square, X } from "lucide-react";
 import { AnimatedNumber, EASE_OUT } from "@/components/motion";
 import { Button, buttonVariants } from "@/components/ui/button";
 import type { useScan } from "@/hooks/use-scan";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion";
 import type { AgentRun, ScanPhase, ScanProgress, ScanSourceProgress } from "@/lib/types";
 import { PLATFORM_LABELS, cn, titleCase } from "@/lib/utils";
 
@@ -49,7 +50,7 @@ function etaText(eta: number | null | undefined) {
 
 /** The bar: springs to each new value, with a sheen running across it while the scan works. */
 export function ScanBar({ percent, active, className }: { percent: number; active: boolean; className?: string }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   const value = Math.max(2, Math.min(100, percent));
   return (
     <div className={cn("relative h-2 w-full overflow-hidden rounded-full bg-primary/15", className)} role="progressbar"
@@ -219,7 +220,7 @@ export function ScanProgressPanel({ scan, className }: { scan: Scan; className?:
 
 /** Compact indicator for the top bar on every page: percent plus a hairline bar along the header's bottom edge. */
 export function ScanIndicator({ run }: { run: AgentRun | null }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   const percent = run?.progress?.percent ?? 1;
   return (
     <AnimatePresence>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   ArrowUpRight, BellRing, Building2, CalendarDays, CheckCheck, Clock3, ExternalLink, Mail, MapPin, Plus, Search,
 } from "lucide-react";
@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { useApplications, useMe } from "@/hooks/use-applications";
 import { useRefreshTracking } from "@/components/i-applied-button";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion";
 import { ApiError, post } from "@/lib/api-client";
 import type { ApplicationDetail, ApplicationStatus, ApplicationSummary } from "@/lib/types";
 import { STATUS_LABELS, cn, formatDate } from "@/lib/utils";
@@ -61,7 +62,7 @@ function daysSince(value: string | null) {
 // ------------------------------------------------------------------ headline tiles
 function StageTile({ label, value, total, index }: { label: string; value: number; total: number; index: number }) {
   const share = total ? Math.round((value / total) * 100) : 0;
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   return (
     <div className="flex flex-col bg-card p-5">
       <div className="flex items-center justify-between text-muted-foreground">
@@ -82,7 +83,7 @@ function StageTile({ label, value, total, index }: { label: string; value: numbe
 
 /** Motion graphic: a signal pulse travels the tracking line while the agent watches your inbox. */
 function TrackingLine() {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   return (
     <div className="relative hidden h-10 overflow-hidden px-2 md:block" aria-hidden>
       <div className="relative h-full">
@@ -103,7 +104,7 @@ function TrackingLine() {
 
 // ------------------------------------------------------------------ one tracked application
 function ProgressRail({ status }: { status: ApplicationStatus }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   const closed = CLOSED.includes(status);
   const reached = stageIndex(status);
   return (

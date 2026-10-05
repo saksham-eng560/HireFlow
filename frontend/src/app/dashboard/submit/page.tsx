@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion, type Variants } from "framer-motion";
+import { AnimatePresence, motion, type Variants } from "framer-motion";
 import {
   AlertTriangle, ArrowUpRight, Bot, Building2, Check, CheckCheck, Copy, FileText, Layers, ListChecks, MapPin, Send, SkipForward,
   Undo2, X, ZoomIn,
@@ -22,6 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { useAgentStatus, useSubmitQueue } from "@/hooks/use-applications";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion";
 import { ApiError, post } from "@/lib/api-client";
 import type { BotMissing, DirectSubmitResponse, ReviewRow, SubmitQueueItem } from "@/lib/types";
 import { PLATFORM_LABELS, cn, timeAgo, titleCase } from "@/lib/utils";
@@ -144,7 +145,7 @@ function SheetRow({ row, state, focused, readOnly, rowRef, onFocus, onConfirm, o
   onCancel: () => void;
   onUndo: () => void;
 }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   const attention = needsYou(row, state.value) && state.status !== "confirmed";
   const empty = !state.value.trim();
   const blocked = blocksConfirm(row, state.value);
@@ -245,7 +246,7 @@ function SheetRow({ row, state, focused, readOnly, rowRef, onFocus, onConfirm, o
 function SubmitInner() {
   const params = useSearchParams();
   const toast = useToast();
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   const { data, isLoading, mutate } = useSubmitQueue();
   const { data: status, mutate: refreshStatus } = useAgentStatus();
   const [currentId, setCurrentId] = useState<string | null>(() => params.get("id"));

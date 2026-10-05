@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useSWRConfig } from "swr";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { CheckCheck } from "lucide-react";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion";
 import { ApiError, post } from "@/lib/api-client";
 import type { ApplicationDetail, ApplicationStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -40,7 +41,7 @@ export function IAppliedButton({ applicationId, onApplied, size = "sm", variant 
 }) {
   const toast = useToast();
   const refresh = useRefreshTracking();
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   const [state, setState] = useState<"idle" | "busy" | "done">("idle");
   // A different application (e.g. the next card in Ready to submit): start fresh, never "Applied" from the last one.
   useEffect(() => setState("idle"), [applicationId]);
