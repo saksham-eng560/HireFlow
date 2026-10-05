@@ -1,0 +1,33 @@
+# Smoke-tests the public demo (docs/DEPLOY.md): every day, after each dashboard deploy, and on demand.
+# Set the repository variables DEMO_SITE_URL (the dashboard, e.g. the Vercel URL) and, optionally,
+# DEMO_API_URL (the API's own URL, e.g. on Render). Without DEMO_SITE_URL the job is skipped.
+name: Smoke test (public demo)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_run:
+    workflows: ["Deploy dashboard (Vercel)"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    if: >-
+      vars.DEMO_SITE_URL != '' &&
+      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Visit the demo like a visitor would
+        env:
+          SITE: ${{ vars.DEMO_SITE_URL }}
+          API: ${{ vars.DEMO_API_URL }}
+        # Free plans sleep when idle, so the first request can take a minute
+        run: python scripts/smoke_test.py --site "$SITE" ${API:+--api "$API"} --demo --timeout 120

@@ -59,7 +59,7 @@ jobs:
       - name: Ruff
         run: |
           ruff check app tests alembic/env.py
-          ruff check ../scripts
+          ruff check ../scripts ../e2e
 
       - name: Bandit (security lint)
         run: bandit -q -r app -ll
@@ -98,9 +98,69 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
+      - name: Colour contrast (WCAG AA)
+        run: python3 ../scripts/check_contrast.py
       - run: npm run build
         env:
           BACKEND_URL: http://localhost:8000
+
+  security:
+    name: Security (dependency audit, secret scan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # gitleaks scans the history too
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: pip-audit (backend dependencies)
+        run: |
+          python -m pip install -U pip pip-audit
+          pip-audit -r backend/requirements.txt --progress-spinner off
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: npm audit (dashboard runtime dependencies)
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high
+      - name: gitleaks (secrets in the code and its history)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: false
+
+  e2e:
+    name: End-to-end (demo mode, Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - name: Install backend dependencies and Chromium
+        run: |
+          python -m pip install -U pip
+          pip install -r backend/requirements-dev.txt
+          python -m playwright install --with-deps chromium
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build the dashboard
+        working-directory: frontend
+        env:
+          BACKEND_URL: http://localhost:8000
+        run: |
+          npm ci
+          npm run build
+      - name: Happy path, Try the demo, landing + SEO, phone swipe, accessibility (axe)
+        env:
+          E2E_LOGS: ${{ runner.temp }}
+        run: scripts/e2e.sh
 
   extension:
     name: Chrome extension

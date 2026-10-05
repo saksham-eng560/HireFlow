@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import uuid
 from typing import Annotated
 
@@ -18,10 +17,26 @@ from app.core.security import TokenError, decode_token
 from app.models.user import User
 
 
+def extract_token(request: Request) -> str | None:
+    auth = request.headers.get("authorization")
+    if auth and auth.lower().startswith("bearer "):
+        return auth[7:].strip()
+    return request.cookies.get(settings.COOKIE_NAME)
+
+
 def _rate_key(request: Request) -> str:
-    token = request.cookies.get(settings.COOKIE_NAME) or request.headers.get("authorization", "")
-    # A stable digest, not hash() (randomized per process), so every API worker shares the client's bucket.
-    return f"{get_remote_address(request)}:{hashlib.sha256(token.encode()).hexdigest()[:16] if token else ''}"
+    """One bucket per address, split per signed-in user (people behind one address aren't one client). Only a token
+    that verifies splits it: a made-up cookie on every request must never buy a fresh bucket (that would get round
+    every limit, sign-in attempts included)."""
+    user = ""
+    token = extract_token(request)
+    if token:
+        try:
+            user = str(decode_token(token, expected_scopes=("access", "extension"))["sub"])
+        except (TokenError, KeyError):
+            user = ""
+    # The user's id, not hash() of anything (randomized per process), so every API worker shares the bucket.
+    return f"{get_remote_address(request)}:{user}"
 
 
 limiter = Limiter(key_func=_rate_key, default_limits=[settings.RATE_LIMIT_DEFAULT],
@@ -49,15 +64,17 @@ def default_rate_limit(request: HTTPConnection) -> None:
 DB = Annotated[Session, Depends(get_db)]
 
 
-def _extract_token(request: Request) -> str | None:
-    auth = request.headers.get("authorization")
-    if auth and auth.lower().startswith("bearer "):
-        return auth[7:].strip()
-    return request.cookies.get(settings.COOKIE_NAME)
+def not_in_demo() -> None:
+    """For endpoints that touch the real world (logins to other sites, Google, e-mail, passwords): off in the demo."""
+    if settings.DEMO_MODE:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not available in the demo: nothing real is connected or sent here")
+
+
+NotInDemo = Depends(not_in_demo)
 
 
 def _user_from_request(request: Request, db: Session, scopes: tuple[str, ...]) -> User:
-    token = _extract_token(request)
+    token = extract_token(request)
     if not token:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not authenticated")
     try:

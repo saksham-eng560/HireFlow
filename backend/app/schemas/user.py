@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 class RegisterRequest(BaseModel):
@@ -16,11 +17,71 @@ class LoginRequest(BaseModel):
     password: str
 
 
+def normalize_url(value: str | None, host: str | None = None) -> str | None:
+    """A profile link: http(s) only (``https://`` added when missing); ``host`` restricts the site, e.g. github.com."""
+    value = (value or "").strip()
+    if not value:
+        return None
+    if len(value) > 500:
+        raise ValueError("link is too long (max 500 characters)")
+    if not value.lower().startswith(("http://", "https://")):
+        value = "https://" + value
+    parts = urlsplit(value)
+    netloc = parts.hostname or ""
+    if parts.scheme not in ("http", "https") or "." not in netloc or any(c.isspace() for c in value):
+        raise ValueError("enter a valid link, e.g. https://example.com/you")
+    if host and not (netloc == host or netloc.endswith("." + host)):
+        raise ValueError(f"enter a {host} link")
+    return value
+
+
+class ProfileLink(BaseModel):
+    """Any other profile, e.g. LeetCode, Codeforces, Kaggle or a blog."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    label: str = Field(min_length=1, max_length=40)
+    url: str
+
+    @field_validator("url")
+    @classmethod
+    def _url(cls, v: str) -> str:
+        url = normalize_url(v)
+        if url is None:
+            raise ValueError("enter a link")
+        return url
+
+
 class ProfileUpdate(BaseModel):
-    full_name: str | None = Field(default=None, max_length=255)
+    full_name: str | None = Field(default=None, min_length=1, max_length=255)
     phone: str | None = Field(default=None, max_length=50)
     location: str | None = Field(default=None, max_length=255)
     linkedin_url: str | None = None
+    github_url: str | None = None
+    portfolio_url: str | None = None
+    profile_links: list[ProfileLink] | None = Field(default=None, max_length=10)
+
+    @field_validator("full_name")
+    @classmethod
+    def _name(cls, v: str | None) -> str:
+        if v is None or not v.strip():
+            raise ValueError("your name can't be empty")
+        return v.strip()
+
+    @field_validator("linkedin_url")
+    @classmethod
+    def _linkedin(cls, v: str | None) -> str | None:
+        return normalize_url(v, host="linkedin.com")
+
+    @field_validator("github_url")
+    @classmethod
+    def _github(cls, v: str | None) -> str | None:
+        return normalize_url(v, host="github.com")
+
+    @field_validator("portfolio_url")
+    @classmethod
+    def _portfolio(cls, v: str | None) -> str | None:
+        return normalize_url(v)
 
 
 class PasswordChange(BaseModel):
@@ -30,6 +91,11 @@ class PasswordChange(BaseModel):
 
 class PreferencesUpdate(BaseModel):
     preferences: dict[str, Any]
+
+
+class SourceConsentIn(BaseModel):
+    enabled: bool
+    agree: bool = False  # "I understand the risk": required to turn a site that forbids automation on
 
 
 class FieldMappingIn(BaseModel):

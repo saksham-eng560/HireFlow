@@ -10,6 +10,8 @@ from app.core.logging_config import configure_logging
 
 configure_logging()
 
+settings.require_production_ready()  # the worker refuses an unsafe production configuration too
+
 celery_app = Celery(
     "hireflow",
     broker=settings.celery_broker,
@@ -20,6 +22,7 @@ celery_app = Celery(
         "app.worker.tasks_email",
         "app.worker.tasks_sync",
         "app.worker.tasks_calendar",
+        "app.worker.tasks_demo",
     ],
 )
 
@@ -43,6 +46,8 @@ celery_app.conf.update(
     task_default_queue="default",
     beat_schedule={
         "scan-due-users": {"task": "hireflow.scan_due_users", "schedule": crontab(minute=7)},
+        "send-due-applications": {"task": "hireflow.send_due_applications", "schedule": 60.0},
+        "reset-demo": {"task": "hireflow.reset_demo", "schedule": crontab(hour=3, minute=37)},  # DEMO_MODE only
         "check-all-emails": {
             "task": "hireflow.check_all_emails",
             "schedule": max(60, settings.EMAIL_POLL_MINUTES * 60),

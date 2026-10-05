@@ -35,20 +35,21 @@ from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
 
-from sqlalchemy import func, inspect, or_, select
+from sqlalchemy import func, inspect, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.core.database import checkpoint
 from app.core.storage import get_storage, user_prefix
 from app.models.agent_run import AgentRun
-from app.models.application import Application
+from app.models.application import Application, ApplicationStatusHistory
 from app.models.enums import STATUS_RANK, ApplicationStatus, ATSPlatform
 from app.models.job import Job
 from app.models.resume import Resume
 from app.models.user import User, UserFieldMapping
 from app.schemas.resume_content import ResumeContent
 from app.scrapers import SCRAPERS, ScrapedJob, ScraperError, SearchQuery, detect_ats_platform, fetch_job_from_url
+from app.services import guardrails, llm_usage, sources
 from app.services.application_service import set_status
 from app.services.company_verifier import SUSPICIOUS, UNVERIFIED, CompanyCheck, check_job, is_trusted, verify_with_llm
 from app.services.cover_letter import generate_cover_letter
@@ -59,7 +60,7 @@ from app.services.llm import get_llm, llm_budget
 from app.services.location_focus import balance_by_location, get_focus, get_season, location_tier, season_status
 from app.services.notifier import notify, push_update
 from app.services.pdf_generator import render_resume_pdf
-from app.services.question_answerer import answer_questions, learnable_key, mappings_dict
+from app.services.question_answerer import answer_questions, learnable_key, mappings_dict, profile_links
 from app.services.rate_limiter import rate_limiter
 from app.services.resume_tailor import light_tailor, tailor_resume
 from app.services.role_focus import drop_off_focus
@@ -269,8 +270,29 @@ def verify_companies(db: Session, jobs: list[Job], run: RunLog | None = None, pr
     return asked
 
 
+def _consent_needed(db: Session, user: User, skipped: list[str], run: RunLog) -> None:
+    """Say why a source was left out; the first time, also tell you how to turn it on."""
+    names = ", ".join(sources.GATED_SOURCES[p]["name"] for p in skipped)
+    if settings.DEMO_MODE:
+        run.log(f"Skipped {names}: not available in the demo")
+        return
+    run.log(f"Skipped {names}: their terms forbid automation, so they stay off until you agree to the risk "
+            "in Settings › Job sources")
+    from app.models.user import Notification
+
+    asked = db.scalar(select(Notification.id).where(Notification.user_id == user.id,
+                                                    Notification.event_type == "source_needs_consent").limit(1))
+    if asked is None:
+        notify(db, user, "source_needs_consent", f"{names}: now opt-in",
+               f"{names} don't allow automated access, so HireFlow now uses them only after you agree to the "
+               "risk. Turn them back on in Settings › Job sources if you want them.",
+               link="/dashboard/settings?tab=sources")
+
+
 def scan_platforms(prefs: dict[str, Any], requested: list[str] | None = None) -> list[str]:
     """The sources a scan searches: the ones you asked for, or your saved ones plus the top companies."""
+    if settings.DEMO_MODE:  # the public demo searches only the bundled demo careers site
+        return ["demo"]
     chosen = list(requested or prefs.get("platforms") or list(SCRAPERS))
     if not requested and prefs.get("scan_top_companies", True) and "top_companies" in SCRAPERS \
             and "top_companies" not in chosen:
@@ -501,13 +523,21 @@ def _swiped(db: Session, app: Application) -> bool:
 def run_scan(db: Session, user: User, trigger: str = "user", platforms: list[str] | None = None,
              auto_prepare: bool = True, run: RunLog | None = None) -> AgentRun:
     run = run or RunLog(db, user, "scan", trigger)
+    if guardrails.is_paused(user):
+        run.log("Paused: no scan until you resume")
+        return run.finish("cancelled")
     prefs = user.prefs
     chosen = scan_platforms(prefs, platforms)
+    skipped = sources.missing_consent(user, chosen)  # sites that forbid automation, without your OK
+    if skipped:
+        chosen = [p for p in chosen if p not in skipped]
+        _consent_needed(db, user, skipped, run)
     progress = ScanProgress(db, run.run, [p for p in chosen if p in SCRAPERS])
     try:
         master = get_master_resume(db, user)
         query = SearchQuery.from_preferences(prefs, limit=int(prefs.get("max_jobs_per_source") or settings.MAX_JOBS_PER_SOURCE))
-        query = dataclasses.replace(query, known_urls=known_source_urls(db))
+        query = dataclasses.replace(query, known_urls=known_source_urls(db),
+                                    allowed_gated=frozenset(p for p in sources.GATED_SOURCES if sources.has_consent(user, p)))
         run.log(f"Scanning {', '.join(chosen)} for {', '.join(query.keywords) or 'all roles'}"
                 + (" (internships only)" if query.internships_only else ""))
         progress.set_phase("discovering", f"Searching {len(progress.sources)} job sources at once")
@@ -665,7 +695,7 @@ def score_applications(db: Session, user: User, apps: list[Application], master:
     checkpoint(db)  # no write lock is held while the LLM works
     pool = ThreadPoolExecutor(max_workers=max(1, min(concurrency, len(to_llm))),
                               thread_name_prefix="scan-score")
-    futures = {pool.submit(evaluate_match, master.parsed_content, snap, prefs, threshold, use_llm=True): (app, heads_up)
+    futures = {pool.submit(llm_usage.in_context(evaluate_match), master.parsed_content, snap, prefs, threshold, use_llm=True): (app, heads_up)
                for app, heads_up, snap in to_llm}
     try:
         for idx, app in enumerate(apps[llm_count:]):  # the long tail: instant heuristic while the LLM works
@@ -713,14 +743,18 @@ def queue_preparations(db: Session, user: User, matched: list[Application], run:
     from app.worker.dispatch import enqueue
 
     prefs = user.prefs
-    budget = int(prefs.get("max_applications_per_day") or 25)
+    if guardrails.is_paused(user):
+        if run and matched:
+            run.log(f"Paused: {len(matched)} matches wait until you resume")
+        return 0
+    budget = guardrails.daily_cap(user)  # your daily limit, never above the server ceiling
     in_flight = db.scalar(
         select(func.count()).select_from(Application).where(
             Application.user_id == user.id,
             Application.status.in_([ApplicationStatus.PREPARING, ApplicationStatus.PENDING_APPROVAL, ApplicationStatus.APPROVED]),
         )
     ) or 0
-    remaining = max(0, budget - rate_limiter.applications_today(str(user.id)) - int(in_flight))
+    remaining = max(0, budget - guardrails.applied_today(db, user) - int(in_flight))
     ordered = sorted(matched, key=lambda a: (*focus_rank(a.job, prefs), *priority_key(a.match_score, a.job.deadline_date)))
     count = 0
     for app in ordered[:remaining]:
@@ -731,6 +765,87 @@ def queue_preparations(db: Session, user: User, matched: list[Application], run:
     if run and len(ordered) > remaining:
         run.log(f"{len(ordered) - remaining} matches deferred (daily budget of {budget} reached)")
     return count
+
+
+# --------------------------------------------------------------------------- pause everything
+def pause_everything(db: Session, user: User) -> None:
+    """Header switch: stop scans now; preparation stops at its next step; nothing is sent until you resume.
+    (A form already being submitted in the browser at this very moment finishes.)"""
+    now = datetime.now(UTC)
+    if user.automation_paused_at is None:
+        user.automation_paused_at = now
+    for run in db.scalars(select(AgentRun).where(AgentRun.user_id == user.id, AgentRun.run_type == "scan",
+                                                 AgentRun.status == "running")):
+        run.status = "cancelled"  # the scan notices within a second or two and stops
+        run.completed_at = now
+        push_update(str(user.id), "agent_run_updated", {"id": str(run.id), "status": "cancelled"})
+
+
+def resume_everything(db: Session, user: User) -> None:
+    """Pick up where you paused. Anything due to be sent gets a fresh undo window first."""
+    from app.worker.dispatch import enqueue
+
+    user.automation_paused_at = None
+    send_at = datetime.now(UTC) + guardrails.SEND_DELAY
+    for app in db.scalars(select(Application).where(Application.user_id == user.id,
+                                                    Application.status == ApplicationStatus.APPROVED)):
+        if app.send_after is None or guardrails.due(app, send_at):
+            guardrails.hold(app, send_at, f"Sending soon: goes out at {send_at:%H:%M} UTC unless you stop it")
+    for app in db.scalars(select(Application).where(Application.user_id == user.id, Application.notes == PAUSED_NOTE,
+                                                    Application.status == ApplicationStatus.PREPARING)):
+        app.notes = None
+        enqueue("prepare_application", str(app.id), after_commit=db)
+
+
+# --------------------------------------------------------------------------- stalled preparations
+# A kept job is "preparing" while its task runs. If the worker or the server restarts mid-way (in local mode
+# the tasks run in the API's own threads) the task is gone and the job would wait forever. Every step of a
+# preparation saves progress (and so moves updated_at), and no single step takes this long:
+STALLED_AFTER = timedelta(minutes=45)
+MAX_PREPARE_RESTARTS = 2
+RESTART_NOTE = "Preparation restarted after an interruption"
+
+
+def requeue_stalled_preparations(db: Session, now: datetime | None = None) -> list[str]:
+    """Kept jobs stuck in "preparing": start their preparation again (at most twice, then they're marked
+    failed with a reason). Each is claimed atomically, so two sweeps never restart the same one. Returns the
+    application ids to enqueue."""
+    now = now or datetime.now(UTC)
+    cutoff = now - STALLED_AFTER
+    paused = select(User.id).where(User.automation_paused_at.is_not(None))
+    stalled = db.scalars(
+        select(Application).where(Application.status == ApplicationStatus.PREPARING, Application.updated_at < cutoff,
+                                  Application.user_id.not_in(paused),
+                                  or_(Application.notes.is_(None), Application.notes != PAUSED_NOTE))
+        .order_by(Application.updated_at).limit(100)
+    ).all()
+    restart = []
+    for app in stalled:
+        claimed = db.execute(
+            update(Application).where(Application.id == app.id, Application.status == ApplicationStatus.PREPARING,
+                                      Application.updated_at < cutoff)
+            .values(updated_at=now).execution_options(synchronize_session=False)
+        ).rowcount == 1
+        if not claimed:
+            continue
+        db.refresh(app)
+        restarts = db.scalar(select(func.count()).select_from(ApplicationStatusHistory).where(
+            ApplicationStatusHistory.application_id == app.id, ApplicationStatusHistory.notes == RESTART_NOTE)) or 0
+        if restarts >= MAX_PREPARE_RESTARTS:
+            app.error_log = f"Preparation was interrupted {restarts + 1} times and didn't finish."
+            app.needs_manual_review = True
+            app.manual_review_reason = ("Preparation kept getting interrupted. Press “Re-fill form” to try again, or "
+                                        "apply yourself and click “I Applied”.")
+            set_status(db, app, ApplicationStatus.FAILED, "agent", "Preparation kept getting interrupted")
+            notify(db, db.get(User, app.user_id), "agent_error", f"Could not prepare {app.job.company_name} application",
+                   app.manual_review_reason, link=f"/dashboard/applications/{app.id}")
+            continue
+        db.add(ApplicationStatusHistory(application_id=app.id, old_status=ApplicationStatus.PREPARING,
+                                        new_status=ApplicationStatus.PREPARING, changed_by="agent", notes=RESTART_NOTE))
+        restart.append(str(app.id))
+    if restart:
+        logger.info("Restarting %d stalled preparation(s)", len(restart))
+    return restart
 
 
 # --------------------------------------------------------------------------- swipe review
@@ -827,6 +942,10 @@ def prepare_application(db: Session, application_id: str, stage: bool | None = N
         # Stale task: the swipe was undone, the job was skipped, or a duplicate task already prepared it.
         logger.info("Skipping preparation of %s: status is %s", app.id, app.status.value)
         return app
+    if guardrails.is_paused(user):
+        app.notes = PAUSED_NOTE  # resuming picks it up again
+        return app
+    app.updated_at = datetime.now(UTC)  # work started: a long wait in the queue isn't mistaken for a stall
     run = RunLog(db, user, "prepare", "system")
     run.log(f"Preparing {app.job.role_title} @ {app.job.company_name}")
     try:
@@ -871,7 +990,7 @@ def prepare_application(db: Session, application_id: str, stage: bool | None = N
                     f"{len(tailored['violations'])} truthfulness corrections")
 
         checkpoint(db)
-        if _undone(db, app, run):
+        if _undone(db, app, run) or _paused(db, user, app, run):
             return app
         if user.prefs.get("cover_letter_enabled", True):
             letter = generate_cover_letter(resume.parsed_content, job)
@@ -889,14 +1008,15 @@ def prepare_application(db: Session, application_id: str, stage: bool | None = N
                     questions = [q for q in GreenhouseScraper().application_questions(ref.board, ref.job_id)
                                  if q["field_type"] != "file" and not q["question"].lower().startswith(("first name", "last name", "email", "phone"))]
                     app.custom_answers = answer_questions(questions, resume.parsed_content, user.prefs,
-                                                          mappings_dict(user.field_mappings), job)
+                                                          mappings_dict(user.field_mappings), job,
+                                                          links=profile_links(user))
                     run.log(f"Pre-answered {len(questions)} Greenhouse questions")
             except Exception as exc:  # noqa: BLE001
                 run.log(f"Could not pre-fetch Greenhouse questions: {exc}", level="warning")
 
         run.run.applications_prepared = 1
         checkpoint(db)
-        if _undone(db, app, run):
+        if _undone(db, app, run) or _paused(db, user, app, run):
             return app
         should_stage = settings.AUTO_STAGE_APPLICATIONS if stage is None else stage
         if should_stage:
@@ -921,6 +1041,19 @@ def _undone(db: Session, app: Application, run: RunLog) -> bool:
     if app.status == ApplicationStatus.PREPARING:
         return False
     run.log(f"Preparation stopped: the job is now {app.status.value.replace('_', ' ')}")
+    run.finish("cancelled")
+    return True
+
+
+PAUSED_NOTE = "Paused: preparation continues when you resume"
+
+
+def _paused(db: Session, user: User, app: Application, run: RunLog) -> bool:
+    """True (and the run is closed) when you pressed "Pause everything" while this was being prepared."""
+    if not guardrails.paused_now(db, user):
+        return False
+    app.notes = PAUSED_NOTE
+    run.log("Paused: preparation stopped here and continues when you resume")
     run.finish("cancelled")
     return True
 
@@ -962,7 +1095,8 @@ def unanswered_questions(app: Application, trust_generated: bool = False) -> lis
         question = str(a.get("question") or "")
         answer = str(a.get("answer") or "").strip()
         factual = bool(FACTUAL.search(normalize_text(question)))
-        if (a.get("required") and not answer) or (factual and (not answer or a.get("needs_user_review"))):
+        guessed = a.get("source") in ("llm", "fallback")  # eligibility answers count only when they're yours
+        if (a.get("required") and not answer) or (factual and (not answer or a.get("needs_user_review") or guessed)):
             blocking.append(question)
         elif a.get("needs_user_review") and not trust_generated:
             blocking.append(question)
@@ -988,9 +1122,17 @@ def _ready_or_submit(db: Session, user: User, app: Application, run: RunLog | No
                 run.log(f"Waiting for you: {app.job.company_name} isn't a verified company")
         if not app.needs_manual_review and not blockers:
             set_status(db, app, ApplicationStatus.APPROVED, "user", "Approved when you kept it in Swipe Review")
+            if bot_apply_requested(app):  # your "Apply with the bot" click on this one: send it now
+                if run:
+                    run.log("Everything answered — submitting (you asked the bot to apply)")
+                enqueue("submit_application", str(app.id), after_commit=db)
+                return
+            # Automatic: it waits in "Sending soon" first, so you can stop it
+            send_at = datetime.now(UTC) + guardrails.SEND_DELAY
+            guardrails.hold(app, send_at, f"Sending soon: goes out at {send_at:%H:%M} UTC unless you stop it")
             if run:
-                run.log("Everything answered — submitting (you kept this job in Swipe Review)")
-            enqueue("submit_application", str(app.id), after_commit=db)
+                run.log(f"Everything answered — sending in {int(guardrails.SEND_DELAY.total_seconds() // 60)} minutes "
+                        "unless you stop it (you kept this job in Swipe Review)")
             return
         if run:
             run.log("Needs your review before submitting: "
@@ -1056,6 +1198,11 @@ def bot_apply(db: Session, user: User, app: Application) -> Application:
 
     if not is_internshala_job(app.job):
         raise ValueError("“Apply with the bot” is for Internshala postings; use Submit for this one")
+    if guardrails.is_paused(user):
+        raise ValueError("HireFlow is paused. Resume it to submit applications.")
+    other = guardrails.duplicate_of(db, user, app)
+    if other is not None:
+        raise ValueError(guardrails.duplicate_message(other))
     if app.job.company_verdict == SUSPICIOUS and not is_trusted(app.job, user.prefs):
         raise ValueError(suspicious_message(app.job))
     missing = internshala_missing(user)
@@ -1230,8 +1377,10 @@ def build_packet(db: Session, user: User, app: Application, resume_path: str | N
     mappings = mappings_dict(user.field_mappings)
     job = app.job
 
+    links = profile_links(user)
+
     def resolver(questions: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        return answer_questions(questions, rc.to_dict(), user.prefs, mappings, job)
+        return answer_questions(questions, rc.to_dict(), user.prefs, mappings, job, links=links)
 
     current = rc.experience[0] if rc.experience else None
     credentials = dict(user.ats_credentials or {})
@@ -1243,9 +1392,10 @@ def build_packet(db: Session, user: User, app: Application, resume_path: str | N
         email=info.email or user.email,
         phone=info.phone or user.phone or "",
         location=info.location or user.location or "",
-        linkedin=info.linkedin or user.linkedin_url or "",
-        github=info.github,
-        portfolio=info.portfolio or mappings.get("website", ""),
+        # Your profile links (onboarding / Settings) first, then the ones on the resume
+        linkedin=user.linkedin_url or info.linkedin or "",
+        github=user.github_url or info.github or "",
+        portfolio=user.portfolio_url or info.portfolio or mappings.get("website", ""),
         current_company=current.company if current else "",
         current_title=current.title if current else "",
         resume_path=resume_path,
@@ -1324,6 +1474,15 @@ def stage_application(db: Session, application_id: str, run: RunLog | None = Non
     """Fill the form and take a screenshot WITHOUT submitting, then wait for approval."""
     app = db.get(Application, uuid.UUID(str(application_id)))
     user = db.get(User, app.user_id)
+    if guardrails.is_paused(user):  # no browser opens while you've paused everything
+        if app.status == ApplicationStatus.PREPARING:
+            app.notes = PAUSED_NOTE
+        return app
+    if (reason := demo_blocker(app)) is not None:
+        app.needs_manual_review, app.manual_review_reason = True, reason
+        app.auto_submit = False
+        _mark_ready(db, user, app)
+        return app
     internshala = is_internshala_job(app.job)
     site = (app.job.raw_data or {}).get("apply_on_site") or ("Internshala" if internshala else None)
     # Boards like Internshala only take applications from your own logged-in account (the opt-in
@@ -1363,7 +1522,7 @@ def stage_application(db: Session, application_id: str, run: RunLog | None = Non
         _internshala_already_applied(db, user, app, run, by_agent=False)
         return app
     if result.screenshot and not result.session_expired:  # a login / sign-up page is not your filled form
-        app.form_screenshot_url = _store(user.id, "screenshots", result.screenshot, "png", "image/png")
+        _replace_file(app, "form_screenshot_url", _store(user.id, "screenshots", result.screenshot, "png", "image/png"))
     app.form_fields = result.fields
     if result.answers:
         app.custom_answers = _merge_answers(app.custom_answers, result.answers)
@@ -1398,6 +1557,11 @@ def approve_application(db: Session, app: Application, cover_letter: str | None 
                         custom_answers: list[dict[str, Any]] | None = None, note: str = "Approved by user") -> Application:
     if app.status not in (ApplicationStatus.PENDING_APPROVAL, ApplicationStatus.FAILED, ApplicationStatus.MATCHED):
         raise ValueError(f"Cannot approve an application in status '{app.status.value}'")
+    if guardrails.is_paused(app.user):
+        raise ValueError("HireFlow is paused. Resume it to submit applications.")
+    other = guardrails.duplicate_of(db, app.user, app)
+    if other is not None:
+        raise ValueError(guardrails.duplicate_message(other))
     if cover_letter is not None:
         app.cover_letter = cover_letter
     if custom_answers is not None:
@@ -1437,6 +1601,51 @@ def mark_self_applied(db: Session, user: User, app: Application, applied_on: dat
     return True
 
 
+def demo_blocker(app: Application) -> str | None:
+    """The public demo only ever opens or sends to the bundled demo careers site."""
+    if not settings.DEMO_MODE:
+        return None
+    url = app.job.application_url or app.job.source_url or ""
+    if url.startswith(settings.demo_site_url + "/"):
+        return None
+    return "Demo: HireFlow only applies to the bundled demo careers site here, so this one isn't opened or sent."
+
+
+def _replace_file(app: Application, attr: str, key: str) -> None:
+    """Point ``attr`` at a newly stored file and delete the one it replaces."""
+    old = getattr(app, attr)
+    setattr(app, attr, key)
+    if old and old != key:
+        try:
+            get_storage().delete(old)
+        except Exception:  # noqa: BLE001 - a leftover file is harmless
+            logger.warning("Could not delete replaced file %s", old)
+
+
+def _within_limits(db: Session, user: User, app: Application) -> bool:
+    """Duplicates, the daily cap and the per-company cap, checked on the server right before sending.
+    A duplicate is dropped; over a limit, it waits (still approved) and the sweep sends it later."""
+    other = guardrails.duplicate_of(db, user, app)
+    if other is not None:
+        message = guardrails.duplicate_message(other)
+        app.send_after = None
+        app.auto_submit = False
+        set_status(db, app, ApplicationStatus.SKIPPED, "agent", f"Not sent: {message}")
+        notify(db, user, "application_duplicate", f"Not sent twice: {app.job.role_title} @ {app.job.company_name}",
+               message, link=f"/dashboard/applications/{other.id}")
+        return False
+    until = guardrails.daily_cap_wait(db, user)
+    if until is not None:
+        guardrails.hold(app, until, f"Daily limit of {guardrails.daily_cap(user)} reached: sends after {until:%d %b %H:%M} UTC")
+        return False
+    until = guardrails.company_cap_wait(db, user, app)
+    if until is not None:
+        guardrails.hold(app, until, f"Already {guardrails.company_cap()} applications to {app.job.company_name} this week: "
+                                    f"sends on {until:%d %b %H:%M} UTC")
+        return False
+    return True
+
+
 def remember_answers(db: Session, user_id: uuid.UUID, answers: list[dict[str, Any]]) -> None:
     """Save approved answers to standard questions (sponsorship, work authorization...) as field mappings."""
     known = set(db.scalars(select(UserFieldMapping.field_name).where(UserFieldMapping.user_id == user_id)))
@@ -1457,6 +1666,17 @@ def submit_application(db: Session, application_id: str) -> Application:
         logger.warning("Refusing to submit application %s in status %s", app.id, app.status)
         return app
     user = db.get(User, app.user_id)
+    if guardrails.is_paused(user):  # sent once you resume (with a fresh undo window)
+        guardrails.hold(app, datetime.now(UTC), "Paused: this is sent when you resume")
+        return app
+    if not guardrails.due(app):  # in "Sending soon" or held by a limit: the sweep sends it when it's due
+        return app
+    if (reason := demo_blocker(app)) is not None:
+        app.needs_manual_review, app.manual_review_reason = True, reason
+        set_status(db, app, ApplicationStatus.PENDING_APPROVAL, "system", "Demo: not sent")
+        return app
+    if not _within_limits(db, user, app):
+        return app
     blocker = direct_submit_blocker(user, app)
     if blocker:  # e.g. the Internshala bot was turned off, or its login expired, after you approved
         app.needs_manual_review = True
@@ -1465,7 +1685,7 @@ def submit_application(db: Session, application_id: str) -> Application:
         return app
     internshala = is_internshala_job(app.job)
     platform = "internshala" if internshala else (app.ats_platform or ATSPlatform.UNKNOWN).value
-    allowed, reason = rate_limiter.can_apply(str(user.id), platform, int(user.prefs.get("max_applications_per_day") or 25))
+    allowed, reason = rate_limiter.can_apply(str(user.id), platform, guardrails.daily_cap(user))
     wait = int(rate_limiter.cooldown_seconds(platform)) + 30
     if allowed and internshala and (reason := _internshala_over_limit(db, user)):
         allowed, wait = False, INTERNSHALA_RECHECK_SECONDS
@@ -1476,16 +1696,32 @@ def submit_application(db: Session, application_id: str) -> Application:
         enqueue("submit_application", str(app.id), countdown=wait, after_commit=db)
         return app
 
+    dry = guardrails.dry_run(user)
     run = RunLog(db, user, "apply", "user")
-    run.log(f"Submitting {app.job.role_title} @ {app.job.company_name} via {platform}")
+    run.log(f"{'Dry run (nothing is sent)' if dry else 'Submitting'}: {app.job.role_title} @ {app.job.company_name} via {platform}")
     checkpoint(db)
-    result = _run_submitter(db, user, app, submit=True)
-    if result.screenshot:
+    # Dry run fills the form and takes the screenshot through the same path as staging, so no submitter
+    # ever reaches its Submit click
+    result = _run_submitter(db, user, app, submit=not dry)
+    if result.form_screenshot and not result.session_expired:  # proof of what was (or would have been) sent
+        _replace_file(app, "form_screenshot_url", _store(user.id, "screenshots", result.form_screenshot, "png", "image/png"))
+    if result.screenshot and not dry and result.screenshot is not result.form_screenshot:
         key = _store(user.id, "screenshots", result.screenshot, "png", "image/png")
         if result.success:
             app.confirmation_screenshot_url = key
     if result.answers:
         app.custom_answers = _merge_answers(app.custom_answers, result.answers)
+    if dry and result.success:
+        app.form_fields = result.fields
+        app.needs_manual_review = True
+        app.manual_review_reason = ("Dry run: the form was filled and screenshotted, but Submit was not clicked. "
+                                    "Turn off Dry run in Settings to send it for real."
+                                    + (f" Also: {result.review_reason}" if result.review_reason else ""))
+        app.staged_at = datetime.now(UTC)
+        set_status(db, app, ApplicationStatus.PENDING_APPROVAL, "system", "Dry run completed: nothing was sent")
+        run.log("Dry run — form filled, Submit not clicked")
+        run.finish("completed")
+        return app
 
     if result.success and result.stage == "submitted":
         rate_limiter.record_application(str(user.id), platform)

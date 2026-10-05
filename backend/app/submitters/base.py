@@ -109,6 +109,8 @@ class SubmissionResult:
     success: bool
     stage: str  # staged | submitted | dry_run | failed
     screenshot: bytes | None = None
+    # The filled form just before Submit is clicked: kept on the application as proof of what was sent
+    form_screenshot: bytes | None = None
     fields: list[dict[str, Any]] = field(default_factory=list)
     answers: list[dict[str, Any]] = field(default_factory=list)
     needs_manual_review: bool = False
@@ -170,7 +172,7 @@ class BaseSubmitter:
             human.dwell()
             result = self.fill(page, packet)
             self._solve_captcha(page)
-            result.screenshot = session.screenshot()
+            result.screenshot = result.form_screenshot = session.screenshot()
             if not submit:
                 result.stage = "staged"
                 result.success = True

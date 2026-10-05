@@ -2,7 +2,7 @@
 PY ?= backend/.venv/bin/python
 SHELL := /bin/bash
 
-.PHONY: start help setup setup-backend setup-frontend dev api worker beat web demo seed migrate test test-pg e2e lint format build up down logs prod-up
+.PHONY: start help setup setup-backend setup-frontend dev api worker beat web demo seed migrate test test-pg e2e e2e-demo metrics lint format build up down logs prod-up
 
 start:  ## One command: install what's missing and run everything (see ./start.sh --help)
 	./start.sh
@@ -50,9 +50,16 @@ test-pg:  ## Backend tests against PostgreSQL (TEST_DATABASE_URL)
 e2e:  ## Browser end-to-end test only
 	cd backend && .venv/bin/python -m pytest -m e2e
 
+e2e-demo:  ## Playwright tests through the real dashboard in demo mode (build the dashboard first)
+	PYTHON=backend/.venv/bin/python scripts/e2e.sh
+
+metrics:  ## Measure the numbers: demo benchmark, test count (add ARGS=--coverage)
+	backend/.venv/bin/python scripts/metrics.py $(ARGS)
+
 lint:  ## Lint backend, scripts and dashboard
-	cd backend && .venv/bin/ruff check app tests alembic/env.py && .venv/bin/ruff check ../scripts
+	cd backend && .venv/bin/ruff check app tests alembic/env.py && .venv/bin/ruff check ../scripts ../e2e
 	cd frontend && npm run lint && npm run typecheck
+	python3 scripts/check_contrast.py
 
 build:  ## Production build of the dashboard
 	cd frontend && npm run build

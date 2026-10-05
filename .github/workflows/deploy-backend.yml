@@ -1,6 +1,6 @@
 # Deploys the backend image (API, Celery worker, Celery beat) to AWS ECS Fargate after CI passes on main.
 #
-# One-time setup (see README "Deploying to AWS + Vercel"):
+# One-time setup (docs/DEPLOY.md for the public demo, docs/SELF_HOSTING.md#deployment for AWS):
 #   Repository variables: AWS_REGION, AWS_ROLE_ARN (GitHub OIDC role allowed to push to ECR and update ECS),
 #                         ECS_CLUSTER, optional ECR_REPOSITORY (default hireflow-backend),
 #                         optional ECS_SERVICES (default "hireflow-api hireflow-worker hireflow-beat")

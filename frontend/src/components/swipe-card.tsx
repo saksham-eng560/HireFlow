@@ -63,6 +63,7 @@ export const SwipeCard = forwardRef<SwipeCardHandle, {
   const salary = formatSalary(job.salary_min, job.salary_max, job.salary_currency);
   const score = card.match_score;
   const shortDescription = (job.description || "").length < 400 && !!job.listing_source;
+  const seasonShown = card.focus?.season === "match" ? card.focus.season_label?.toLowerCase() : undefined;
 
   return (
     <motion.article
@@ -71,20 +72,20 @@ export const SwipeCard = forwardRef<SwipeCardHandle, {
       onDragEnd={onDragEnd}
       style={{ x, y, rotate }}
       whileDrag={{ cursor: "grabbing" }}
-      className="absolute inset-0 flex cursor-grab touch-pan-y select-none flex-col overflow-hidden border border-foreground/70 bg-background shadow-2xl"
+      className="absolute inset-0 flex cursor-grab touch-pan-y select-none flex-col overflow-hidden rounded-2xl border bg-card shadow-xl"
       aria-label={`${job.role_title} at ${job.company_name}`}
     >
       {/* stamps */}
       <motion.span style={{ opacity: keepOpacity }}
-        className="pointer-events-none absolute left-6 top-24 z-10 -rotate-12 border-4 border-primary bg-background/80 px-4 py-1 font-display text-3xl text-primary">
+        className="pointer-events-none absolute left-6 top-24 z-10 -rotate-12 rounded-lg border-4 border-primary bg-background/80 px-4 py-1 font-display font-extrabold text-3xl text-primary">
         KEEP
       </motion.span>
       <motion.span style={{ opacity: appliedOpacity }}
-        className="pointer-events-none absolute left-1/2 top-24 z-10 -translate-x-1/2 border-4 border-success bg-background/80 px-4 py-1 font-display text-3xl text-success">
+        className="pointer-events-none absolute left-1/2 top-24 z-10 -translate-x-1/2 rounded-lg border-4 border-success bg-background/80 px-4 py-1 font-display font-extrabold text-3xl text-success">
         APPLIED
       </motion.span>
       <motion.span style={{ opacity: skipOpacity }}
-        className="pointer-events-none absolute right-6 top-24 z-10 rotate-12 border-4 border-foreground bg-background/80 px-4 py-1 font-display text-3xl text-foreground">
+        className="pointer-events-none absolute right-6 top-24 z-10 rotate-12 rounded-lg border-4 border-foreground bg-background/80 px-4 py-1 font-display font-extrabold text-3xl text-foreground">
         SKIP
       </motion.span>
 
@@ -107,24 +108,26 @@ export const SwipeCard = forwardRef<SwipeCardHandle, {
           </div>
         </div>
         <div className="flex shrink-0 flex-col items-end">
-          <span className={cn("font-display text-5xl leading-none tabular-nums", score != null && score >= 70 ? "text-primary" : "text-foreground")}>
+          <span className={cn("font-mono font-bold tracking-tight text-5xl leading-none tabular-nums", score != null && score >= 70 ? "text-primary" : "text-foreground")}>
             {score ?? "—"}
           </span>
           <span className="label-caps mt-1 text-[9px] text-muted-foreground">match</span>
         </div>
       </header>
 
-      <div className="flex-1 space-y-5 overflow-y-auto p-5 scrollbar-thin sm:p-6">
+      {/* pan-y here too: this is its own scroll container, and touch-action stops at it (else the browser claims sideways swipes) */}
+      <div className="flex-1 touch-pan-y space-y-5 overflow-y-auto p-5 scrollbar-thin sm:p-6">
         <div className="flex flex-wrap gap-1.5">
           <FocusBadges card={card} />
           {job.job_type && <Badge tone="outline">{titleCase(job.job_type)}</Badge>}
-          {job.terms?.map((t) => <Badge key={t} tone="outline"><CalendarDays className="h-3 w-3" />{t}</Badge>)}
+          {job.terms?.filter((t) => !seasonShown || t.toLowerCase() !== seasonShown)  // not twice: the season badge shows it
+            .map((t) => <Badge key={t} tone="outline"><CalendarDays className="h-3 w-3" />{t}</Badge>)}
           {salary && <Badge tone="outline">{salary}</Badge>}
           {job.sponsorship && job.sponsorship !== "Other" && <Badge tone={sponsorshipTone(job.sponsorship)}>{job.sponsorship}</Badge>}
         </div>
 
         {card.heads_up.length > 0 && (
-          <div className="flex items-start gap-2 border border-warning/50 bg-warning/10 p-3 text-sm">
+          <div className="rounded-lg flex items-start gap-2 border border-warning/50 bg-warning/10 p-3 text-sm">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
             <span>{card.heads_up.join(" · ")}</span>
           </div>
@@ -207,7 +210,7 @@ function FocusBadges({ card }: { card: ReviewCard }) {
 export function DeckShadowCard({ card, depth }: { card: ReviewCard; depth: number }) {
   return (
     <div aria-hidden
-      className="absolute inset-0 flex flex-col border border-line bg-card p-6 transition-transform duration-300"
+      className="rounded-2xl absolute inset-0 flex flex-col border border-line bg-card p-6 transition-transform duration-300"
       style={{ transform: `translateY(${depth * 24}px) scale(${1 - depth * 0.035})`, zIndex: -depth, opacity: 1 - depth * 0.3 }}>
       <p className="label-caps text-[10px] text-muted-foreground">{card.job.company_name}</p>
       <p className="display mt-3 line-clamp-2 text-xl text-foreground/60">{card.job.role_title}</p>

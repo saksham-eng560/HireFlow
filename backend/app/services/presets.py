@@ -11,6 +11,7 @@ import copy
 import re
 from typing import Any
 
+from app.config import settings
 from app.models.user import DEFAULT_PREFERENCES, merge_preferences
 
 STARTUP_GREENHOUSE = [
@@ -76,6 +77,15 @@ PRESETS = ("ai-engineer", "internships", "startups", "new-grad", "india-internsh
 INDIA_PLATFORMS = ["internshala", "linkedin", "indeed", "internships", "greenhouse", "lever", "ashby", "generic"]
 
 
+def clamp_daily_cap(prefs: dict[str, Any]) -> dict[str, Any]:
+    """Bring a daily cap saved above MAX_APPLICATIONS_PER_DAY_CEILING (e.g. before the ceiling existed) down to it."""
+    value = prefs.get("max_applications_per_day")
+    ceiling = settings.MAX_APPLICATIONS_PER_DAY_CEILING
+    if isinstance(value, int) and not isinstance(value, bool) and value > ceiling:
+        return {**prefs, "max_applications_per_day": ceiling}
+    return prefs
+
+
 def apply_preset(prefs: dict[str, Any], name: str) -> dict[str, Any]:
     """Return new preferences with the preset merged in (your own lists are kept and extended)."""
     if name not in PRESETS:
@@ -101,7 +111,7 @@ def apply_preset(prefs: dict[str, Any], name: str) -> dict[str, Any]:
         "review_mode": "swipe",
         "auto_submit_kept": True,
         "platforms": _union(current.get("platforms"), MASS_APPLY_PLATFORMS),
-        "max_applications_per_day": max(int(current.get("max_applications_per_day") or 25), 100),
+        "max_applications_per_day": settings.MAX_APPLICATIONS_PER_DAY_CEILING,  # mass apply: as many as the server allows
         "max_jobs_per_source": max(int(current.get("max_jobs_per_source") or 0), 300),
         "posted_within_days": max(int(current.get("posted_within_days") or 14), 30),
         "remote_preference": "any",

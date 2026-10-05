@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, ArrowRight, Check, CircleSlash, Clock, Layers, Loader2, Radar, Square, X } from "lucide-react";
 import { AnimatedNumber, EASE_OUT } from "@/components/motion";
 import { Button, buttonVariants } from "@/components/ui/button";
 import type { useScan } from "@/hooks/use-scan";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion";
 import type { AgentRun, ScanPhase, ScanProgress, ScanSourceProgress } from "@/lib/types";
 import { PLATFORM_LABELS, cn, titleCase } from "@/lib/utils";
 
@@ -49,12 +50,12 @@ function etaText(eta: number | null | undefined) {
 
 /** The bar: springs to each new value, with a sheen running across it while the scan works. */
 export function ScanBar({ percent, active, className }: { percent: number; active: boolean; className?: string }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   const value = Math.max(2, Math.min(100, percent));
   return (
-    <div className={cn("relative h-2 w-full overflow-hidden bg-primary/15", className)} role="progressbar"
+    <div className={cn("relative h-2 w-full overflow-hidden rounded-full bg-primary/15", className)} role="progressbar"
       aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(percent)} aria-label="Scan progress">
-      <motion.div className="absolute inset-y-0 left-0 overflow-hidden bg-primary"
+      <motion.div className="absolute inset-y-0 left-0 overflow-hidden rounded-full bg-primary"
         initial={false} animate={{ width: `${value}%` }}
         transition={reduce ? { duration: 0 } : { type: "spring", stiffness: 90, damping: 22 }}>
         {active && !reduce && (
@@ -84,7 +85,7 @@ function SourceChip({ source }: { source: ScanSourceProgress }) {
   }[status];
   return (
     <li title={source.error || undefined}
-      className={cn("relative flex min-w-0 items-center gap-2 overflow-hidden border px-3 py-2 text-xs transition-colors",
+      className={cn("rounded-lg relative flex min-w-0 items-center gap-2 overflow-hidden border px-3 py-2 text-xs transition-colors",
         status === "running" ? "border-primary/60" : "border-line/70")}>
       {icon}
       <span className="min-w-0 flex-1 truncate font-semibold">{label}</span>
@@ -102,7 +103,7 @@ function Counter({ label, value, of }: { label: string; value: number; of?: numb
   return (
     <div className="min-w-0">
       <p className="label-caps truncate text-[10px] text-muted-foreground">{label}</p>
-      <p className="mt-1 font-display text-2xl leading-none">
+      <p className="mt-1 font-mono text-2xl font-bold leading-none tracking-tight tabular-nums">
         <AnimatedNumber value={value} duration={0.5} />
         {of != null && <span className="text-base text-muted-foreground"> / {of.toLocaleString()}</span>}
       </p>
@@ -124,7 +125,7 @@ function Running({ run, progress, scan }: { run: AgentRun; progress: ScanProgres
             <span className="h-2 w-2 animate-pulse-dot bg-primary" aria-hidden /> Scanning · {clock(elapsed)}{eta ? ` · ${eta}` : ""}
           </p>
           <p className="mt-3 flex items-baseline gap-4">
-            <span className="font-display text-5xl leading-none tabular-nums sm:text-6xl">
+            <span className="font-mono font-bold tracking-tight text-5xl leading-none tabular-nums sm:text-6xl">
               <AnimatedNumber value={percent} duration={0.6} className="tabular-nums" />%
             </span>
             <span className="min-w-0 text-sm text-muted-foreground" aria-live="polite">{progress?.message || "Starting the scan…"}</span>
@@ -207,7 +208,7 @@ export function ScanProgressPanel({ scan, className }: { scan: Scan; className?:
         <motion.section key="scan-panel" aria-label="Scan progress"
           initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
           transition={{ duration: 0.35, ease: EASE_OUT }} className={cn("overflow-hidden", className)}>
-          <div className="mb-8 border border-foreground/70 bg-card p-5 sm:p-6">
+          <div className="mb-8 rounded-xl border bg-card shadow-sm p-5 sm:p-6">
             {scan.running ? <Running run={scan.running} progress={scan.progress} scan={scan} />
               : scan.finished && <Finished run={scan.finished} onDismiss={scan.dismissFinished} />}
           </div>
@@ -219,7 +220,7 @@ export function ScanProgressPanel({ scan, className }: { scan: Scan; className?:
 
 /** Compact indicator for the top bar on every page: percent plus a hairline bar along the header's bottom edge. */
 export function ScanIndicator({ run }: { run: AgentRun | null }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   const percent = run?.progress?.percent ?? 1;
   return (
     <AnimatePresence>
@@ -232,7 +233,7 @@ export function ScanIndicator({ run }: { run: AgentRun | null }) {
           </motion.span>
           <motion.span key="scan-pill" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}>
             <Link href="/dashboard" title={run.progress?.message || "Scanning"}
-              className="label-caps mr-2 inline-flex items-center gap-2 border border-foreground/40 px-3 py-1.5 text-[11px] transition-colors hover:border-foreground">
+              className="rounded-full label-caps mr-2 inline-flex items-center gap-2 border border-foreground/40 px-3 py-1.5 text-[11px] transition-colors hover:border-foreground">
               <Radar className="h-3.5 w-3.5 animate-spin text-primary [animation-duration:2.4s]" />
               <span className="hidden sm:inline">Scanning</span>
               <span className="tabular-nums">{Math.round(percent)}%</span>

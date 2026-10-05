@@ -36,7 +36,7 @@ from app.schemas.application import (
 from app.schemas.resume_content import normalize_resume
 from app.scrapers import ScrapedJob, detect_ats_platform
 from app.services import agent_orchestrator as orch
-from app.services import review_sheet
+from app.services import guardrails, review_sheet
 from app.services.application_service import set_status
 from app.worker.dispatch import enqueue
 
@@ -312,19 +312,54 @@ def log_manual_application(body: ManualApplicationCreate, user: CurrentUser, db:
     return _detail(db, app)
 
 
+@router.post("/{application_id}/cancel-send")
+def cancel_send(application_id: str, user: CurrentUser, db: DB) -> dict:
+    """Stop an application in "Sending soon" (or held by a limit) before it goes out: back to Ready to submit."""
+    app = _get(db, user.id, application_id)
+    if not guardrails.release(db, app):
+        raise HTTPException(status.HTTP_409_CONFLICT, "Too late to stop it: it's already being sent" if
+                            app.status == ApplicationStatus.APPROVED else "This application isn't waiting to be sent")
+    app.auto_submit = False
+    app.notes = None
+    set_status(db, app, ApplicationStatus.PENDING_APPROVAL, "user", "You stopped it before it was sent")
+    return _detail(db, app)
+
+
+@router.post("/{application_id}/send-now", status_code=202)
+def send_now(application_id: str, user: CurrentUser, db: DB) -> dict:
+    """Skip the rest of the undo window. Limits still apply: over one, it waits again."""
+    app = _get(db, user.id, application_id)
+    if guardrails.is_paused(user):
+        raise HTTPException(status.HTTP_409_CONFLICT, "HireFlow is paused. Resume it to submit applications.")
+    if not guardrails.release(db, app):
+        raise HTTPException(status.HTTP_409_CONFLICT, "This application isn't waiting to be sent")
+    app.notes = None
+    enqueue("submit_application", str(app.id), after_commit=db)
+    return _detail(db, app)
+
+
+def _not_paused(user: User) -> None:
+    if guardrails.is_paused(user):
+        raise HTTPException(status.HTTP_409_CONFLICT, "HireFlow is paused. Resume it first.")
+
+
 @router.post("/{application_id}/restage", status_code=202)
 def restage(application_id: str, user: CurrentUser, db: DB) -> dict:
+    _not_paused(user)
     app = _get(db, user.id, application_id)
     if app.status not in (ApplicationStatus.PENDING_APPROVAL, ApplicationStatus.FAILED):
         raise HTTPException(status.HTTP_409_CONFLICT, "Only pending or failed applications can be re-staged")
     app.auto_submit = False  # you're reviewing this one yourself now
     set_status(db, app, ApplicationStatus.PREPARING, "user", "Re-filling the form")
-    enqueue("stage_application", str(app.id), after_commit=db)
+    # Never prepared (it failed before the resume was tailored): run the whole preparation, which fills the form too
+    prepared = app.tailored_resume_id is not None or bool(app.cover_letter)
+    enqueue("stage_application" if prepared else "prepare_application", str(app.id), after_commit=db)
     return _detail(db, app)
 
 
 @router.post("/{application_id}/prepare", status_code=202)
 def reprepare(application_id: str, user: CurrentUser, db: DB) -> dict:
+    _not_paused(user)
     app = _get(db, user.id, application_id)
     if app.status in (ApplicationStatus.APPROVED, ApplicationStatus.APPLIED):
         raise HTTPException(status.HTTP_409_CONFLICT, "Already submitted / being submitted")

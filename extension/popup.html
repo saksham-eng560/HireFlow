@@ -4,22 +4,25 @@
   <meta charset="utf-8" />
   <title>HireFlow</title>
   <style>
-    :root { --primary: #4f46e5; --fg: #0f172a; --muted: #64748b; --border: #e2e8f0; --ok: #059669; --err: #dc2626; --bg: #fff; }
-    @media (prefers-color-scheme: dark) { :root { --fg: #f1f5f9; --muted: #94a3b8; --border: #334155; --bg: #0f172a; } }
+    /* HireFlow blue and white; status is a blue shade plus an icon (✓ / ✕), never colour alone */
+    :root { --primary: #2563eb; --on-primary: #fff; --fg: #0f172a; --muted: #475569; --border: #dbe3ee; --ok: #1e40af; --err: #1e293b; --bg: #fff; }
+    @media (prefers-color-scheme: dark) { :root { --primary: #60a5fa; --on-primary: #0f172a; --fg: #fff; --muted: #a9bcd3; --border: #26324a; --ok: #93c5fd; --err: #e2e8f0; --bg: #090e1a; } }
     body { width: 320px; margin: 0; padding: 16px; font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--fg); background: var(--bg); }
     h1 { font-size: 15px; margin: 0 0 2px; display: flex; align-items: center; gap: 8px; }
     h1 img { width: 20px; height: 20px; }
     h2 { font-size: 12px; margin: 14px 0 0; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
     p.sub { margin: 0 0 12px; color: var(--muted); }
     label { display: block; font-weight: 600; margin: 10px 0 4px; }
-    input { width: 100%; box-sizing: border-box; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--fg); font: inherit; }
-    button { width: 100%; margin-top: 10px; padding: 8px; border: 0; border-radius: 6px; background: var(--primary); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+    input { width: 100%; box-sizing: border-box; padding: 7px 9px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--fg); font: inherit; }
+    input:focus { outline: 2px solid color-mix(in srgb, var(--primary) 35%, transparent); border-color: var(--primary); }
+    button { width: 100%; margin-top: 10px; padding: 8px; border: 0; border-radius: 8px; background: var(--primary); color: var(--on-primary); font: inherit; font-weight: 600; cursor: pointer; }
     button.secondary { background: transparent; color: var(--fg); border: 1px solid var(--border); }
     button:disabled { opacity: .6; cursor: default; }
     .buttons { display: flex; gap: 8px; }
     .buttons button { flex: 1; }
-    .status { margin-top: 12px; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border); }
-    .ok { color: var(--ok); } .err { color: var(--err); }
+    .status { margin-top: 12px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); }
+    .ok { color: var(--ok); } .err { color: var(--err); font-weight: 600; }
+    .ok:not(:empty)::before { content: "✓ "; } .err:not(:empty)::before { content: "✕ "; }
     .row { display: flex; justify-content: space-between; gap: 8px; }
     .hint { color: var(--muted); font-size: 12px; margin-top: 10px; }
   </style>

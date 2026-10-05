@@ -21,6 +21,14 @@ DEFAULT_OLLAMA_MODEL = "qwen3.5:4b"  # used when LLM_PROVIDER=ollama and OLLAMA_
 LLM_PROVIDERS = ("auto", "anthropic", "openai", "ollama")
 
 
+def _redis_tls(url: str | None) -> str | None:
+    """Celery refuses a TLS Redis URL (``rediss://``, e.g. Upstash) that doesn't say how to check the
+    certificate: verify it, unless the URL already says otherwise."""
+    if url and url.startswith("rediss://") and "ssl_cert_reqs=" not in url:
+        return f"{url}{'&' if '?' in url else '?'}ssl_cert_reqs=required"
+    return url
+
+
 def _csv(value: str | None) -> list[str]:
     if not value:
         return []
@@ -51,6 +59,13 @@ class Settings(BaseSettings):
     PUBLIC_API_URL: str = "http://localhost:8000"
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
     ALLOW_REGISTRATION: bool = True
+    # Public demo: nothing real is sent (dry-run submissions to the demo careers site, no job-site logins, no Gmail
+    # sending), a one-click demo account, and "Load sample profile" in onboarding. See docs/HIREFLOW_PLAN.md §5.5.
+    DEMO_MODE: bool = False
+    # The shared account behind "Try the demo" (re-created every night) and where the bundled demo careers site
+    # is reached from the worker's browser (default: {PUBLIC_API_URL}{API_PREFIX}/demo-careers)
+    DEMO_ACCOUNT_EMAIL: str = "demo@hireflow.app"
+    DEMO_SITE_URL: str = ""
 
     # ---- Security ----
     SECRET_KEY: str = DEFAULT_SECRET
@@ -60,6 +75,12 @@ class Settings(BaseSettings):
     COOKIE_NAME: str = "hireflow_session"
     COOKIE_SECURE: bool = False
     RATE_LIMIT_DEFAULT: str = "300/minute"
+    # Stricter limits where abuse costs the most (per client): signing in, signing up, uploads, scans
+    RATE_LIMIT_LOGIN: str = "10/minute;60/hour"
+    RATE_LIMIT_REGISTER: str = "5/minute;30/hour"
+    RATE_LIMIT_DEMO: str = "20/minute;200/hour"  # "Try the demo" creates nothing; a class or office may share one IP
+    RATE_LIMIT_UPLOAD: str = "10/minute;60/hour"
+    RATE_LIMIT_SCAN: str = "6/minute;40/hour"
 
     # ---- Database / cache ----
     DATABASE_URL: str = "postgresql+psycopg://hireflow:hireflow@localhost:5432/hireflow"
@@ -82,6 +103,12 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "gpt-4o"
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
     LLM_MAX_RETRIES: int = 3
+    # AI budget per user per day (0 = no limit); past it, features use their rule-based version until tomorrow (UTC)
+    LLM_CALLS_PER_USER_PER_DAY: int = 400
+    DEMO_LLM_CALLS_PER_USER_PER_DAY: int = 40
+    # The public demo (DEMO_MODE) uses these cheaper models when set
+    DEMO_ANTHROPIC_MODEL: str = ""
+    DEMO_OPENAI_MODEL: str = ""
     LLM_TIMEOUT_SECONDS: float = 300.0
     LLM_PROVIDER: str = "auto"  # auto (Anthropic -> OpenAI -> Ollama, whichever is set up) | anthropic | openai | ollama
     # Ollama: free models on your own machine / server, or Ollama Cloud (https://ollama.com)
@@ -132,6 +159,10 @@ class Settings(BaseSettings):
     EMAIL_POLL_MINUTES: int = 5
     MAX_JOBS_PER_SOURCE: int = 50
     MAX_LLM_EVALUATIONS_PER_SCAN: int = 40
+    # Hard ceiling on applications a day: no preference, preset or the UI can go above it (default 10 for new users)
+    MAX_APPLICATIONS_PER_DAY_CEILING: int = 25
+    # At most this many applications to one company in any 7 days (one per role: duplicates are never sent)
+    MAX_APPLICATIONS_PER_COMPANY_PER_WEEK: int = 3
     # ---- Scan speed ----
     SCAN_SOURCE_CONCURRENCY: int = 8  # job sources (platforms) searched at the same time
     SCRAPER_BOARD_CONCURRENCY: int = 6  # company boards / pages fetched at once within one source
@@ -152,6 +183,8 @@ class Settings(BaseSettings):
 
     # ---- Monitoring ----
     SENTRY_DSN: str | None = None
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.1
+    SENTRY_RELEASE: str | None = None  # defaults to the deployed commit on Render (RENDER_GIT_COMMIT)
 
     # ---- Paths ----
     PROMPTS_DIR: str = Field(default_factory=lambda: str(REPO_ROOT / "prompts"))
@@ -167,6 +200,16 @@ class Settings(BaseSettings):
                 return default
         return value
 
+    @field_validator("DATABASE_URL", mode="after")
+    @classmethod
+    def _psycopg_driver(cls, value: str) -> str:
+        # Hosted Postgres (Neon, Supabase, Render, Heroku) hands out postgres:// or postgresql:// URLs, which
+        # SQLAlchemy would open with psycopg2; HireFlow ships psycopg 3.
+        for prefix in ("postgres://", "postgresql://"):
+            if value.startswith(prefix):
+                return "postgresql+psycopg://" + value[len(prefix):]
+        return value
+
     # ---------------------------------------------------------------- helpers
     @property
     def cors_origins(self) -> list[str]:
@@ -178,11 +221,11 @@ class Settings(BaseSettings):
 
     @property
     def celery_broker(self) -> str:
-        return self.CELERY_BROKER_URL or self.REDIS_URL or "memory://"
+        return _redis_tls(self.CELERY_BROKER_URL or self.REDIS_URL) or "memory://"
 
     @property
     def celery_backend(self) -> str | None:
-        return self.CELERY_RESULT_BACKEND or self.REDIS_URL
+        return _redis_tls(self.CELERY_RESULT_BACKEND or self.REDIS_URL)
 
     @property
     def google_redirect_uri(self) -> str:
@@ -252,8 +295,32 @@ class Settings(BaseSettings):
         if not self.ENCRYPTION_KEY:
             problems.append("ENCRYPTION_KEY must be set (python -c \"import os,base64;print(base64.urlsafe_b64encode(os.urandom(32)).decode())\")")
         if not self.COOKIE_SECURE:
-            problems.append("COOKIE_SECURE should be true when served over HTTPS")
+            problems.append("COOKIE_SECURE must be true (production is served over HTTPS only)")
         return problems
+
+    def require_production_ready(self) -> None:
+        """Refuse to start in production with an unsafe configuration (the API and the worker call this)."""
+        if not self.is_production:
+            return
+        problems = self.validate_for_production()
+        if problems:
+            raise RuntimeError("Refusing to start in production:\n  - " + "\n  - ".join(problems))
+
+    @property
+    def demo_site_url(self) -> str:
+        return (self.DEMO_SITE_URL or f"{self.PUBLIC_API_URL.rstrip('/')}{self.API_PREFIX}/demo-careers").rstrip("/")
+
+    @property
+    def trusted_origins(self) -> set[str]:
+        """Origins allowed to send cookie-authenticated changes (the dashboard, the API itself, CORS_ORIGINS)."""
+        from urllib.parse import urlsplit
+
+        origins = set()
+        for url in [*self.cors_origins, self.FRONTEND_URL, self.PUBLIC_API_URL]:
+            parts = urlsplit(url or "")
+            if parts.scheme and parts.netloc:
+                origins.add(f"{parts.scheme}://{parts.netloc}".lower())
+        return origins
 
 
 @lru_cache

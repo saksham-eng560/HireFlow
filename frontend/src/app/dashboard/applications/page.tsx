@@ -6,6 +6,7 @@ import { Suspense, useState } from "react";
 import { CheckCheck, Search, Send } from "lucide-react";
 import { ApplicationCard } from "@/components/application-card";
 import { EmptyState } from "@/components/empty-state";
+import { ErrorState } from "@/components/error-state";
 import { Stagger, StaggerItem } from "@/components/motion";
 import { PageHeader } from "@/components/page-header";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -34,7 +35,7 @@ function ApplicationsInner() {
   const [sort, setSort] = useState("updated");
   const [page, setPage] = useState(1);
   const statuses = FILTERS.find((f) => f.key === filter)?.statuses;
-  const { data, isLoading } = useApplications({ status: statuses, q, sort, page, page_size: 20 });
+  const { data, isLoading, error, mutate } = useApplications({ status: statuses, q, sort, page, page_size: 20 });
   const counts = data?.counts || {};
   const count = (s?: string) => (s ? s.split(",").reduce((n, k) => n + (counts[k] || 0), 0) : undefined);
 
@@ -66,7 +67,8 @@ function ApplicationsInner() {
       </div>
       <div className="space-y-3">
         {isLoading && Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-[76px]" />)}
-        {!isLoading && !data?.items.length && (
+        {error && !data && <ErrorState error={error} onRetry={() => mutate()} title="Couldn't load your applications" />}
+        {data && !data.items.length && (
           <EmptyState icon={Send} title="No applications here" description="Run a scan from the Overview page, or add a job by URL on the Jobs page." />
         )}
         {!!data?.items.length && (

@@ -99,3 +99,8 @@ export function titleCase(value: string | null | undefined) {
   if (!value) return "";
   return value.replace(/[_-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
+
+/** "1 offer", "3 offers". */
+export function plural(count: number, word: string, many = `${word}s`): string {
+  return `${count.toLocaleString()} ${count === 1 ? word : many}`;
+}

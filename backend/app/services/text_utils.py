@@ -78,12 +78,34 @@ _SKILL_ALIASES = {
 }
 
 
+# Hidden on the page = not part of the posting a person reads (and a place to hide instructions for an AI)
+_HIDDEN_STYLE = re.compile(r"display\s*:\s*none|visibility\s*:\s*hidden|font-size\s*:\s*0(?![.\d])|opacity\s*:\s*0(?![.\d])"
+                           r"|(?:^|;)\s*(?:max-)?height\s*:\s*0(?![.\d])|clip\s*:\s*rect\(\s*0", re.I)
+_INVISIBLE_CHARS = re.compile("[\u00ad\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff\U000e0000-\U000e007f]")
+
+
+def strip_hidden(soup: BeautifulSoup) -> BeautifulSoup:
+    """Remove scripts, styles and elements a visitor can't see (hidden, aria-hidden, display:none...)."""
+    for tag in soup(["script", "style", "noscript", "template", "head", "meta", "iframe", "svg"]):
+        tag.decompose()
+    for tag in soup.find_all(True):
+        if tag.decomposed or tag.attrs is None:
+            continue
+        hidden = (tag.has_attr("hidden") or str(tag.get("aria-hidden", "")).lower() == "true"
+                  or (tag.name == "input" and str(tag.get("type", "")).lower() == "hidden")
+                  or bool(_HIDDEN_STYLE.search(str(tag.get("style", "")))))
+        if hidden:
+            tag.decompose()
+    return soup
+
+
 def html_to_text(value: str | None) -> str:
     if not value:
         return ""
+    value = _INVISIBLE_CHARS.sub("", value)
     if "<" not in value and "&" not in value:
         return value.strip()
-    text = BeautifulSoup(html.unescape(value), "lxml").get_text("\n")
+    text = strip_hidden(BeautifulSoup(html.unescape(value), "lxml")).get_text("\n")
     text = re.sub(r"[ \t\xa0]+", " ", text)
     text = re.sub(r"\n\s*\n+", "\n\n", text)
     return text.strip()

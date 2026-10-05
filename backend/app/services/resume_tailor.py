@@ -6,7 +6,12 @@ re-validates the output against the master resume and reverts anything it cannot
 * personal info, education and certifications are copied verbatim from the master;
 * every master job is kept with its original company / title / dates / location;
 * bullets that introduce numbers or skills absent from the master entry are dropped;
-* skills and project technologies must be evidenced somewhere in the master resume.
+* skills and project technologies must be evidenced somewhere in the master resume;
+* a degree the master resume doesn't mention (a "PhD" in the summary) is never claimed.
+
+:func:`audit` then checks the final result again, independently: if any company, title, date,
+degree, school or skill is still not in the master resume, the tailored version is blocked and
+your original is used.
 """
 
 from __future__ import annotations
@@ -37,6 +42,24 @@ logger = logging.getLogger(__name__)
 # --------------------------------------------------------------------------- truthfulness
 def _numbers(text: str) -> set[str]:
     return {n.replace(",", "") for n in re.findall(r"\d[\d,]*(?:\.\d+)?", text or "")}
+
+
+# Degrees spelled out the ways resumes do: each maps to one canonical name
+_DEGREES: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"\bph\.?\s?d\b|\bdoctorate\b|\bdoctoral\b"), "phd"),
+    (re.compile(r"\bmba\b"), "mba"),
+    (re.compile(r"\bm\.?\s?tech\b"), "mtech"),
+    (re.compile(r"\bb\.?\s?tech\b"), "btech"),
+    # "master's" / "masters" / "master of science", never "Scrum Master" or "master branch"
+    (re.compile(r"\bmaster'?s\b|\bmaster of (?:science|arts|engineering|technology|computer|business)|\bm\.s\.|\bm\.?\s?sc\b"),
+     "masters"),
+    (re.compile(r"\bbachelor'?s?\b|\bb\.s\.|\bb\.?\s?sc\b|\bb\.e\.|\bb\.?\s?eng\b"), "bachelors"),
+]
+
+
+def degrees_in(text: str) -> set[str]:
+    norm = normalize_text(text)
+    return {name for pattern, name in _DEGREES if pattern.search(norm)}
 
 
 def is_skill_supported(skill: str, master_text_norm: str, master_skills: set[str]) -> bool:
@@ -76,6 +99,11 @@ def enforce_truthfulness(master: dict[str, Any], tailored: dict[str, Any]) -> tu
     def key(company: str, title: str) -> str:
         return f"{normalize_text(company)}|{normalize_text(title)}"
 
+    master_degrees = degrees_in(master_rc.full_text())
+    known_companies = {normalize_text(e.company) for e in master_rc.experience}
+    for e in tailored_rc.experience:
+        if normalize_text(e.company) not in known_companies:
+            violations.append(f"Removed experience not in your resume: {e.title} at {e.company}")
     tailored_by_key = {key(e.company, e.title): e for e in tailored_rc.experience}
     tailored_by_company = {normalize_text(e.company): e for e in tailored_rc.experience}
     ordered_keys = [key(e.company, e.title) for e in tailored_rc.experience]
@@ -99,6 +127,10 @@ def enforce_truthfulness(master: dict[str, Any], tailored: dict[str, Any]) -> tu
                 unsupported = [s for s in extract_skills(bullet) if not is_skill_supported(s, m_skill_text, master_skills)]
                 if unsupported:
                     violations.append(f"Dropped bullet claiming unsupported skill(s) {unsupported} at {m.company}")
+                    continue
+                new_degrees = degrees_in(bullet) - master_degrees
+                if new_degrees:
+                    violations.append(f"Dropped bullet claiming a degree not in your resume {sorted(new_degrees)} at {m.company}")
                     continue
                 kept.append(bullet)
             # Never lose content: re-append master bullets whose facts were not carried over.
@@ -151,11 +183,56 @@ def enforce_truthfulness(master: dict[str, Any], tailored: dict[str, Any]) -> tu
     # Summary: revert if it claims unsupported skills or new numbers
     summary = out.get("summary") or ""
     bad = [s for s in extract_skills(summary) if not is_skill_supported(s, master_text_norm, master_skills)]
+    bad += sorted(degrees_in(summary) - master_degrees)
     if bad or (_numbers(summary) - _numbers(master_rc.full_text())):
         violations.append(f"Reverted summary containing unverified claims {bad or 'numbers'}")
         out["summary"] = master_rc.summary
 
     return normalize_resume(out), violations
+
+
+def audit(master: dict[str, Any], tailored: dict[str, Any]) -> list[str]:
+    """Independent last check of a finished tailored resume: everything it states about you must be in
+    the master resume. Returns the problems (empty = OK)."""
+    m = ResumeContent.model_validate(master)
+    t = ResumeContent.model_validate(tailored)
+    master_text = m.full_text()
+    master_norm = normalize_text(master_text)
+    from app.services.job_matcher import resume_skill_set
+
+    master_skills = resume_skill_set(m)
+    problems: list[str] = []
+    facts = {(normalize_text(e.company), normalize_text(e.title), normalize_text(e.start_date or ""),
+              normalize_text(e.end_date or "")) for e in m.experience}
+    for e in t.experience:
+        fact = (normalize_text(e.company), normalize_text(e.title), normalize_text(e.start_date or ""),
+                normalize_text(e.end_date or ""))
+        if fact not in facts:
+            problems.append(f"Experience not in your resume as written: {e.title} at {e.company} ({e.start_date}-{e.end_date})")
+    schools = {(normalize_text(e.institution), normalize_text(e.degree or "")) for e in m.education}
+    for e in t.education:
+        if (normalize_text(e.institution), normalize_text(e.degree or "")) not in schools:
+            problems.append(f"Education not in your resume: {e.degree} at {e.institution}")
+    projects = {normalize_text(p.name) for p in m.projects}
+    problems += [f"Project not in your resume: {p.name}" for p in t.projects if normalize_text(p.name) not in projects]
+    problems += [f"Skill not in your resume: {s}" for s in t.skills.all() if not is_skill_supported(s, master_norm, master_skills)]
+    claimed = degrees_in(t.full_text()) - degrees_in(master_text)
+    problems += [f"Degree not in your resume: {d}" for d in sorted(claimed)]
+    new_numbers = _numbers(t.full_text()) - _numbers(master_text)
+    if new_numbers:
+        problems.append(f"Numbers not in your resume: {sorted(new_numbers)[:5]}")
+    return problems
+
+
+def _checked(master: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
+    """Block a tailored resume that still states something the master doesn't: send the original instead."""
+    problems = audit(master, result["tailored_resume"])
+    if problems:
+        logger.warning("Tailored resume blocked by the final fabrication check: %s", "; ".join(problems))
+        result = {**result, "tailored_resume": normalize_resume(master), "method": f"{result['method']}+blocked",
+                  "violations": [*result["violations"], *(f"Blocked: {p}" for p in problems),
+                                 "Your original resume content was used instead"]}
+    return result
 
 
 # --------------------------------------------------------------------------- tailoring
@@ -223,12 +300,14 @@ def tailor_resume(master: dict[str, Any], job: Job) -> dict[str, Any]:
             )
             tailored, violations = enforce_truthfulness(master, data.get("tailored_resume") or {})
             changes = [str(c) for c in (data.get("changes_made") or [])]
-            return {"tailored_resume": tailored, "changes_made": changes, "violations": violations, "method": "llm"}
+            return _checked(master, {"tailored_resume": tailored, "changes_made": changes, "violations": violations,
+                                     "method": "llm"})
         except LLMError as exc:
             logger.warning("LLM tailoring failed for job %s; using heuristic: %s", job.id, exc)
     tailored, changes = heuristic_tailor(master, job)
     tailored, violations = enforce_truthfulness(master, tailored)
-    return {"tailored_resume": tailored, "changes_made": changes, "violations": violations, "method": "heuristic"}
+    return _checked(master, {"tailored_resume": tailored, "changes_made": changes, "violations": violations,
+                             "method": "heuristic"})
 
 
 def light_tailor(master: dict[str, Any], job: Job) -> dict[str, Any]:

@@ -14,7 +14,7 @@ export function ApplicationCard({ app, showIApplied = true, action }: {
 }) {
   const job = app.job;
   return (
-    <div className="group relative flex items-center gap-4 border bg-card p-4 transition-[border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-foreground/60 motion-reduce:hover:translate-y-0">
+    <div className="group relative flex items-center gap-4 rounded-lg border bg-card p-4 transition-[border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-foreground/60 motion-reduce:hover:translate-y-0">
       <Link href={`/dashboard/applications/${app.id}`} className="flex min-w-0 flex-1 items-center gap-4 outline-none after:absolute after:inset-0 focus-visible:after:ring-2 focus-visible:after:ring-ring">
         <JobMatchBadge score={app.match_score} />
         <div className="min-w-0 flex-1">

@@ -11,9 +11,9 @@ worker always sees the rows the task depends on.
 from __future__ import annotations
 
 import logging
-import time
+import threading
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor, wait
 from typing import Any
 
 from sqlalchemy import event
@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 _executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="hireflow-task")
 _registry: dict[str, Callable[..., Any]] = {}
 _inline = {"enabled": False}
+_running: set[Future[None]] = set()  # local background tasks not finished yet
 
 
 def register(name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
@@ -39,7 +40,7 @@ def register(name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
 
 def _load_registry() -> None:
     if not _registry:
-        from app.worker import tasks_apply, tasks_calendar, tasks_email, tasks_scan, tasks_sync  # noqa: F401
+        from app.worker import tasks_apply, tasks_calendar, tasks_demo, tasks_email, tasks_scan, tasks_sync  # noqa: F401
 
 
 def use_local_execution() -> bool:
@@ -61,8 +62,6 @@ def _run_local(name: str, args: tuple[Any, ...], countdown: int | None) -> None:
     fn = _registry[name]
 
     def job() -> None:
-        if countdown:
-            time.sleep(countdown)
         try:
             fn(*args)
         except Exception:
@@ -72,7 +71,23 @@ def _run_local(name: str, args: tuple[Any, ...], countdown: int | None) -> None:
         if not countdown:  # delayed retries are dropped in inline mode
             fn(*args)
         return
-    _executor.submit(job)
+    if countdown:  # wait on a timer, not in a worker thread: a long wait never blocks other tasks
+        timer = threading.Timer(countdown, lambda: _track(_executor.submit(job)))
+        timer.daemon = True
+        timer.start()
+        return
+    _track(_executor.submit(job))
+
+
+def _track(future: Future[None]) -> None:
+    _running.add(future)
+    future.add_done_callback(_running.discard)
+
+
+def wait_for_local_tasks(timeout: float = 60) -> None:
+    """Wait until the local background tasks started so far have finished (tests: so a task an API call
+    started finishes inside that test, not during the next one)."""
+    wait(list(_running), timeout=timeout)
 
 
 def _send(name: str, args: tuple[Any, ...], countdown: int | None) -> None:

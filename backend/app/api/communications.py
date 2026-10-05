@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
 
-from app.api.deps import DB, CurrentUser, parse_uuid
+from app.api.deps import DB, CurrentUser, NotInDemo, parse_uuid
 from app.api.serializers import communication_out
 from app.models.application import Application
 from app.models.communication import Communication
@@ -77,7 +77,7 @@ def update_communication(comm_id: str, body: CommunicationUpdate, user: CurrentU
     return communication_out(comm)
 
 
-@router.post("/{comm_id}/draft")
+@router.post("/{comm_id}/draft", dependencies=[NotInDemo])
 def create_draft(comm_id: str, body: SendReplyRequest, user: CurrentUser, db: DB) -> dict:
     comm = _get(db, user.id, comm_id)
     try:
@@ -91,7 +91,7 @@ def create_draft(comm_id: str, body: SendReplyRequest, user: CurrentUser, db: DB
     return communication_out(comm)
 
 
-@router.post("/{comm_id}/send")
+@router.post("/{comm_id}/send", dependencies=[NotInDemo])
 def send(comm_id: str, body: SendReplyRequest, user: CurrentUser, db: DB) -> dict:
     """Send a reply from the user's Gmail — only on explicit user action."""
     comm = _get(db, user.id, comm_id)

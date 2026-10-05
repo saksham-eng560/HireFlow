@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
 import { ArrowRight, Crosshair } from "lucide-react";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion";
 import type { Preferences } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -19,7 +20,7 @@ const LOOP = 7.5; // seconds for a chip to cross the whole pipeline
  * lights up as a card passes it. Static (cards resting at stations) when "reduce motion" is on.
  */
 export function PipelineMotion({ className }: { className?: string }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   const gap = LOOP / CHIPS.length;
   return (
     <div className={cn("relative", className)} aria-label="Scan, swipe, tailor and fill, apply, track: the agent's pipeline" role="img">
@@ -35,13 +36,13 @@ export function PipelineMotion({ className }: { className?: string }) {
             transition={{ duration: LOOP / 2, repeat: Infinity, ease: "easeInOut", repeatDelay: 0.4 }} />
         )}
         {STATIONS.map((name, i) => (
-          <span key={name} className="relative mx-auto flex h-6 w-6 items-center justify-center border border-foreground/70 bg-background" aria-hidden>
+          <span key={name} className="relative mx-auto flex h-6 w-6 items-center justify-center rounded-xl border bg-card shadow-sm" aria-hidden>
             {!reduce && (
-              <motion.span className="absolute inset-0 bg-primary" initial={{ opacity: 0 }}
+              <motion.span className="absolute inset-0 rounded-[inherit] bg-primary" initial={{ opacity: 0 }}
                 animate={{ opacity: [0, 1, 0] }}
                 transition={{ duration: 0.9, repeat: Infinity, repeatDelay: gap - 0.9, delay: (i / (STATIONS.length - 1)) * LOOP * 0.86 }} />
             )}
-            {reduce && i === STATIONS.length - 1 && <span className="absolute inset-0 bg-primary" />}
+            {reduce && i === STATIONS.length - 1 && <span className="absolute inset-0 rounded-[inherit] bg-primary" />}
           </span>
         ))}
       </div>
@@ -52,11 +53,11 @@ export function PipelineMotion({ className }: { className?: string }) {
       <div className="relative mt-8 h-16 overflow-hidden" aria-hidden>
         {CHIPS.map((chip, i) => (
           <motion.div key={chip.role}
-            className="absolute top-2 flex w-40 flex-col border border-foreground/60 bg-background px-3 py-2 shadow-lg"
-            style={reduce ? { left: `${6 + i * 32}%` } : undefined}
-            initial={reduce ? false : { left: "-22%", opacity: 0 }}
-            animate={reduce ? undefined : { left: ["-22%", "4%", "84%", "104%"], opacity: [0, 1, 1, 0] }}
-            transition={reduce ? undefined : { duration: LOOP, times: [0, 0.1, 0.9, 1], repeat: Infinity, ease: "linear", delay: i * gap }}>
+            className="absolute top-2 flex w-40 flex-col rounded-lg border border-foreground/30 bg-background px-3 py-2 shadow-lg"
+            initial={{ left: "-22%", opacity: 0 }}
+            /* reduced motion: cards rest at stations (an explicit target: "reduce" is only known after mount) */
+            animate={reduce ? { left: `${6 + i * 32}%`, opacity: 1 } : { left: ["-22%", "4%", "84%", "104%"], opacity: [0, 1, 1, 0] }}
+            transition={reduce ? { duration: 0 } : { duration: LOOP, times: [0, 0.1, 0.9, 1], repeat: Infinity, ease: "linear", delay: i * gap }}>
             <span className="truncate text-xs font-semibold">{chip.role}</span>
             <span className="truncate text-[11px] text-muted-foreground">{chip.place} · Summer 2027</span>
           </motion.div>
@@ -68,7 +69,7 @@ export function PipelineMotion({ className }: { className?: string }) {
 
 /** Overview strip: what the agent is hunting for right now, with a live "radar" dot. */
 export function FocusStrip({ prefs }: { prefs: Preferences }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   const focus = prefs.location_focus;
   const on = focus && focus.enabled !== false && focus.country;
   const first = focus?.prime_cities?.[0];
@@ -80,7 +81,7 @@ export function FocusStrip({ prefs }: { prefs: Preferences }) {
     on && prime ? `${prime} first` : null,
   ].filter(Boolean);
   return (
-    <div className="mb-8 flex flex-wrap items-center gap-x-4 gap-y-2 border px-5 py-3 text-sm">
+    <div className="rounded-xl mb-8 flex flex-wrap items-center gap-x-4 gap-y-2 border px-5 py-3 text-sm">
       <span className="relative flex h-5 w-5 items-center justify-center text-primary" aria-hidden>
         <Crosshair className="h-4 w-4" />
         {!reduce && (

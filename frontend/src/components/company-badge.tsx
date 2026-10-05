@@ -61,12 +61,12 @@ export function CompanyBadge({ company, check, className, showTier = true }: {
   return (
     <span className={cn("inline-flex flex-wrap items-center gap-1.5", className)}>
       {showTier && check?.tier_label && (
-        <span className="label-caps border border-foreground/60 px-1.5 py-0.5 text-[10px] text-foreground">{check.tier_label}</span>
+        <span className="rounded-full label-caps border border-foreground/60 px-1.5 py-0.5 text-[10px] text-foreground">{check.tier_label}</span>
       )}
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button type="button" onPointerDown={(e) => e.stopPropagation()} /* never starts a swipe */
-            className={cn("label-caps inline-flex items-center gap-1 border px-1.5 py-0.5 text-[10px] transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", look.tone)}
+            className={cn("rounded-full label-caps inline-flex items-center gap-1 border px-1.5 py-0.5 text-[10px] transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", look.tone)}
             aria-label={`Company check for ${company}: ${look.label}. Show why`}>
             <Icon className="h-3 w-3" aria-hidden /> {look.label}
           </button>
@@ -105,8 +105,8 @@ export function CompanyTag({ check, className }: { check?: CompanyCheck | null; 
   const Icon = look.icon;
   return (
     <span className={cn("inline-flex items-center gap-1", className)}>
-      {check?.tier_label && <span className="label-caps border border-foreground/60 px-1 text-[9px] text-foreground">{check.tier_label}</span>}
-      <span className={cn("label-caps inline-flex items-center gap-1 border px-1 text-[9px]", look.tone)} title={check?.reasons?.join("\n")}>
+      {check?.tier_label && <span className="rounded-full label-caps border border-foreground/60 px-1 text-[9px] text-foreground">{check.tier_label}</span>}
+      <span className={cn("rounded-full label-caps inline-flex items-center gap-1 border px-1 text-[9px]", look.tone)} title={check?.reasons?.join("\n")}>
         <Icon className="h-2.5 w-2.5" aria-hidden /> {look.label}
       </span>
     </span>
@@ -117,7 +117,7 @@ export function CompanyTag({ check, className }: { check?: CompanyCheck | null; 
 export function YearFitTag({ label, className }: { label?: string | null; className?: string }) {
   if (!label) return null;
   return (
-    <span className={cn("label-caps inline-flex items-center gap-1 border border-success/60 px-1.5 py-0.5 text-[10px] text-success", className)}>
+    <span className={cn("rounded-full label-caps inline-flex items-center gap-1 border border-success/60 px-1.5 py-0.5 text-[10px] text-success", className)}>
       <GraduationCap className="h-3 w-3" aria-hidden /> {label}
     </span>
   );

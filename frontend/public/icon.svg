@@ -1,9 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- HireFlow mark: cream bracket + signal-red block on ink charcoal (matches the site logo) -->
-  <rect width="512" height="512" fill="#1d1b1b"/>
-  <rect x="24" y="24" width="464" height="464" fill="none" stroke="#6f6767" stroke-opacity="0.55" stroke-width="4"/>
-  <g transform="translate(112 76) scale(18)">
-    <path d="M2 1h7v4H6v10h3v4H2z" fill="#f2ecec"/>
-    <path d="M11 7h3v6h-3z" fill="#e12d35"/>
-  </g>
+  <!-- HireFlow mark: a white "H" whose crossbar flows like a wave, on HireFlow blue (matches the site logo) -->
+  <rect width="512" height="512" rx="116" fill="#2563EB"/>
+  <path d="M156 136v240M356 136v240" fill="none" stroke="#FFFFFF" stroke-width="58" stroke-linecap="round"/>
+  <path d="M156 286c34-58 72-66 100-30s66 28 100-30" fill="none" stroke="#BFDBFE" stroke-width="46" stroke-linecap="round"/>
 </svg>

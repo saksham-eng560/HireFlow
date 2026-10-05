@@ -5,6 +5,8 @@ import { Suspense, useEffect, useState } from "react";
 import useSWR from "swr";
 import { CalendarDays, CalendarPlus, ExternalLink, MapPin, Plus, RefreshCw, Video } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
+import { ErrorState } from "@/components/error-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -123,7 +125,7 @@ function InterviewDetail({ id, onChanged }: { id: string; onChanged: () => void 
           <TabsContent value="questions">
             <ol className="space-y-3">
               {(interview.likely_questions || []).map((q, i) => (
-                <li key={i} className="border p-3">
+                <li key={i} className="rounded-lg border p-3">
                   <p className="text-sm font-medium">{i + 1}. {q.question}</p>
                   <p className="mt-1 text-sm text-muted-foreground">{q.answer_outline}</p>
                 </li>
@@ -153,8 +155,9 @@ function InterviewsInner() {
   const params = useSearchParams();
   const [selected, setSelected] = useState<string | null>(params.get("id"));
   const [addOpen, setAddOpen] = useState(false);
-  const { data: upcoming, mutate: m1 } = useSWR<{ items: Interview[] }>("/interviews?upcoming=true", fetcher);
-  const { data: past, mutate: m2 } = useSWR<{ items: Interview[] }>("/interviews?upcoming=false", fetcher);
+  const { data: upcoming, error: upcomingError, mutate: m1 } = useSWR<{ items: Interview[] }>("/interviews?upcoming=true", fetcher);
+  const { data: past, error: pastError, mutate: m2 } = useSWR<{ items: Interview[] }>("/interviews?upcoming=false", fetcher);
+  const loadError = upcomingError || pastError;
   const refresh = () => { m1(); m2(); };
   useEffect(() => {
     if (!selected && upcoming?.items.length) setSelected(upcoming.items[0].id);
@@ -162,7 +165,7 @@ function InterviewsInner() {
 
   const renderList = (items: Interview[]) => items.map((i) => (
     <button key={i.id} onClick={() => setSelected(i.id)}
-      className={cn("block w-full border bg-card p-3 text-left hover:bg-accent/50", selected === i.id && "border-primary ring-1 ring-primary")}>
+      className={cn("block w-full rounded-lg border bg-card p-3 text-left hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", selected === i.id && "border-primary ring-1 ring-primary")}>
       <p className="font-medium">{i.company_name}</p>
       <p className="text-sm text-muted-foreground">{i.role_title}</p>
       <p className="mt-1 text-xs text-muted-foreground">{formatDateTime(i.scheduled_at)} · {titleCase(i.interview_type || "interview")}</p>
@@ -173,7 +176,11 @@ function InterviewsInner() {
     <div>
       <PageHeader title="Interviews" description="Auto-created from recruiter e-mails, synced to Google Calendar with 24h and 1h reminders."
         actions={<Button onClick={() => setAddOpen(true)}><Plus /> Add interview</Button>} />
-      {!upcoming?.items.length && !past?.items.length ? (
+      {loadError && (!upcoming || !past) ? (
+        <ErrorState error={loadError} onRetry={() => Promise.all([m1(), m2()])} title="Couldn't load your interviews" />
+      ) : !upcoming || !past ? (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]"><Skeleton className="h-64" /><Skeleton className="h-64" /></div>
+      ) : !upcoming.items.length && !past.items.length ? (
         <EmptyState icon={CalendarPlus} title="No interviews yet" description="When a recruiter invites you, the agent adds it here and to your calendar with prep notes." />
       ) : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">

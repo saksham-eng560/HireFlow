@@ -6,6 +6,7 @@ import useSWR from "swr";
 import { ArrowUpRight, Building2, Check, Crown, MapPin, Radar, Search } from "lucide-react";
 import { CompanyBadge, YearFitTag } from "@/components/company-badge";
 import { EmptyState } from "@/components/empty-state";
+import { ErrorState } from "@/components/error-state";
 import { JobMatchBadge } from "@/components/job-match-badge";
 import { PageHeader } from "@/components/page-header";
 import { ScanProgressPanel } from "@/components/scan-progress";
@@ -53,7 +54,7 @@ function JobRow({ job, onChanged }: { job: Job; onChanged: () => void }) {
           <CompanyBadge company={job.company_name} check={job.company} />
           <YearFitTag label={job.year_fit} />
         </p>
-        <p className="mt-1 break-words font-display text-lg leading-tight">{job.role_title}</p>
+        <p className="mt-1 break-words font-display font-extrabold text-lg leading-tight">{job.role_title}</p>
         <p className="mt-1 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
           {job.location && <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" />{job.location}</span>}
           {job.is_remote && !/remote/i.test(job.location || "") && <span>Remote</span>}
@@ -84,7 +85,7 @@ export default function TopCompaniesPage() {
   const params = new URLSearchParams();
   if (tier !== "all") params.set("tier", tier);
   if (q.trim()) params.set("q", q.trim());
-  const { data, isLoading, mutate } = useSWR<TopCompanies>(`/jobs/top-companies${params.size ? `?${params}` : ""}`, fetcher);
+  const { data, isLoading, error, mutate } = useSWR<TopCompanies>(`/jobs/top-companies${params.size ? `?${params}` : ""}`, fetcher);
   const [showCatalog, setShowCatalog] = useState(false);
   const scanning = !!scan.running;
   const tracked = data ? Object.values(data.catalog).reduce((n, list) => n + list.length, 0) : 0;
@@ -105,7 +106,7 @@ export default function TopCompaniesPage() {
         <div role="tablist" aria-label="Company category" className="flex flex-wrap gap-2">
           {[{ key: "all" as const, label: "All", count: data?.total ?? 0 }, ...(data?.tiers ?? [])].map((t) => (
             <button key={t.key} type="button" role="tab" aria-selected={tier === t.key} onClick={() => setTier(t.key)}
-              className={cn("label-caps inline-flex items-center gap-2 border px-3 py-1.5 text-[11px] transition-colors",
+              className={cn("rounded-full label-caps inline-flex items-center gap-2 border px-3 py-1.5 text-[11px] transition-colors",
                 tier === t.key ? "border-primary bg-primary text-primary-foreground" : "border-foreground/30 hover:border-foreground")}>
               {t.label} <span className="tabular-nums opacity-80">{t.count}</span>
             </button>
@@ -117,9 +118,11 @@ export default function TopCompaniesPage() {
         </div>
       </div>
 
-      <div className="mt-6 border border-foreground/70 bg-background">
+      <div className="mt-6 rounded-xl border bg-card shadow-sm">
         {isLoading ? (
           <div className="space-y-2 p-4"><Skeleton className="h-16" /><Skeleton className="h-16" /><Skeleton className="h-16" /></div>
+        ) : error && !data ? (
+          <ErrorState className="m-4" error={error} onRetry={() => mutate()} title="Couldn't load top companies" />
         ) : data && data.items.length ? (
           <ul aria-label="Internships at top companies">
             {data.items.map((job) => <JobRow key={job.id} job={job} onChanged={() => void mutate()} />)}

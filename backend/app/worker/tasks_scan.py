@@ -12,6 +12,7 @@ from app.core.database import session_scope
 from app.models.agent_run import AgentRun
 from app.models.user import User
 from app.services import agent_orchestrator as orch
+from app.services import llm_usage
 from app.worker.celery_app import celery_app
 from app.worker.dispatch import enqueue, register
 
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 @register("scan_user")
 def scan_user(user_id: str, trigger: str = "user", platforms: list[str] | None = None, run_id: str | None = None) -> str | None:
-    with session_scope() as db:
+    with llm_usage.for_user(user_id), session_scope() as db:
         user = db.get(User, uuid.UUID(user_id))
         if user is None or not user.is_active:
             return None
@@ -39,7 +40,7 @@ def scan_due_users() -> int:
         now = datetime.now(UTC)
         for user in users:
             prefs = user.prefs
-            if not prefs.get("scan_enabled", True):
+            if not prefs.get("scan_enabled", True) or user.automation_paused_at is not None:
                 continue
             interval = timedelta(hours=int(prefs.get("scan_interval_hours") or 6))
             if user.last_scan_at and now - user.last_scan_at < interval:

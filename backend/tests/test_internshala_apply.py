@@ -591,12 +591,14 @@ def _setup(email: str = "jane@example.com", *, bot: bool = True, session: bool =
     url = url or f"https://internshala.com/internship/detail/python-{uuid.uuid4().hex[:8]}"
     with SessionLocal() as db:
         user = db.query(User).filter(User.email == email).one()
+        # "auto_submit_kept": these tests were written when Submit automatically was on by default (now off for new users).
+        # Each job gets its own title: one role at a company is only ever applied to once (the duplicate guard).
         user.preferences = {**(user.preferences or {}), "internshala_bot_enabled": bot, "internshala_auto_submit": auto_submit,
-                            "internshala_daily_limit": limit}
+                            "internshala_daily_limit": limit, "auto_submit_kept": True}
         user.internshala_session = SESSION if session else None
         user.internshala_session_valid = valid
         user.linkedin_session_valid = True
-        job = Job(company_name="Acme Labs", role_title="Python Development Intern", description="Python FastAPI internship. " * 30,
+        job = Job(company_name="Acme Labs", role_title=f"Python Development Intern {uuid.uuid4().hex[:6]}", description="Python FastAPI internship. " * 30,
                   source_url=url, application_url=url, source_platform=ATSPlatform.CUSTOM, job_type=JobType.INTERNSHIP,
                   location="Delhi, India", dedupe_key=f"acme-{uuid.uuid4().hex[:8]}",
                   raw_data={"listing_source": "internshala", "apply_on_site": "Internshala"} if raw is None else raw,
@@ -740,14 +742,17 @@ def test_session_expiry_flips_the_internshala_flag(auth_client: TestClient, mast
 
 @pytest.mark.parametrize("auto_submit", [False, True])
 def test_auto_submit_only_with_the_internshala_pref(auth_client: TestClient, master_resume: dict,
-                                                    monkeypatch: pytest.MonkeyPatch, auto_submit: bool) -> None:
+                                                    monkeypatch: pytest.MonkeyPatch, auto_submit: bool, send_held: Any) -> None:
     rec = Recorder(monkeypatch)
     app_id = _setup(auto_submit=auto_submit)
     with run_inline(), SessionLocal() as db:
         orch.stage_application(db, app_id)
         db.commit()
     app = _app(app_id)
-    if auto_submit:
+    if auto_submit:  # automatic: "Sending soon" first (the undo window), then sent
+        assert [c[0] for c in rec.calls] == ["stage"] and app.status == ApplicationStatus.APPROVED and app.send_after
+        assert send_held() == 1
+        app = _app(app_id)
         assert [c[0] for c in rec.calls] == ["stage", "submit"]
         assert app.status == ApplicationStatus.APPLIED and app.confirmation_screenshot_url
         with SessionLocal() as check:
@@ -982,7 +987,7 @@ def test_one_browser_at_a_time_on_your_internshala_account(auth_client: TestClie
 
 
 def test_submit_automatically_covers_jobs_kept_before_the_bot_could_apply(auth_client: TestClient, master_resume: dict,
-                                                                          monkeypatch: pytest.MonkeyPatch) -> None:
+                                                                          monkeypatch: pytest.MonkeyPatch, send_held: Any) -> None:
     """Reported: "I turned it on but it doesn't auto apply". A job you kept while the bot was off waited for
     your click forever, even with Submit automatically on. Now it goes out once the bot can apply."""
     rec = Recorder(monkeypatch)
@@ -994,6 +999,8 @@ def test_submit_automatically_covers_jobs_kept_before_the_bot_could_apply(auth_c
     with run_inline():
         r = auth_client.put("/api/v1/users/me/preferences", json={"preferences": {"internshala_bot_enabled": True}})
     assert r.status_code == 200, r.text
+    assert [c[0] for c in rec.calls] == ["stage"] and _app(app_id).send_after  # "Sending soon"
+    assert send_held() == 1
     assert [c[0] for c in rec.calls] == ["stage", "submit"]
     assert _app(app_id).status == ApplicationStatus.APPLIED
 
@@ -1063,15 +1070,18 @@ def test_the_bot_only_applies_by_itself_to_verified_companies(auth_client: TestC
     app = _app(app_id)
     assert [c[0] for c in rec.calls] == ["stage"] and app.status == ApplicationStatus.PENDING_APPROVAL
     assert app.manual_review_reason.startswith("Not sent automatically: Acme Labs isn't a verified company")
-    r = auth_client.post(f"/api/v1/applications/{app_id}/bot-apply")
+    with run_inline():
+        r = auth_client.post(f"/api/v1/applications/{app_id}/bot-apply")
     if verdict == "suspicious":
         assert r.status_code == 409 and "possible fraud" in r.json()["detail"] and rec.calls == [("stage", rec.calls[0][1])]
         return
     assert r.status_code == 202, r.text
+    assert [c[0] for c in rec.calls] == ["stage", "stage", "submit"]  # your click: filled again and sent
+    assert _app(app_id).status == ApplicationStatus.APPLIED
 
 
 def test_marking_a_company_legit_sends_what_waited_for_it(auth_client: TestClient, master_resume: dict,
-                                                         monkeypatch: pytest.MonkeyPatch) -> None:
+                                                         monkeypatch: pytest.MonkeyPatch, send_held: Any) -> None:
     rec = Recorder(monkeypatch)
     app_id = _setup(auto_submit=True, verdict="unverified")
     with run_inline(), SessionLocal() as db:
@@ -1081,6 +1091,7 @@ def test_marking_a_company_legit_sends_what_waited_for_it(auth_client: TestClien
     with run_inline():
         r = auth_client.post("/api/v1/jobs/company-trust", json={"company": "Acme Labs", "trusted": True})
     assert r.status_code == 200 and r.json()["applications_updated"] == 1
+    assert send_held() == 1  # after the undo window
     assert [c[0] for c in rec.calls] == ["stage", "submit"] and _app(app_id).status == ApplicationStatus.APPLIED
     # And "not legit": avoided from now on, its waiting jobs skipped
     other = _setup(status=ApplicationStatus.MATCHED, verdict="unverified")

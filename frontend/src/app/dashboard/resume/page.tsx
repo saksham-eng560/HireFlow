@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import { Download, FileText, RefreshCw, Save, Sparkles, Upload } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
+import { ErrorState } from "@/components/error-state";
 import { PageHeader } from "@/components/page-header";
 import { ResumeEditor } from "@/components/resume-editor";
 import { Badge } from "@/components/ui/badge";
@@ -39,13 +40,18 @@ export default function ResumePage() {
   }, [master, dirty]);
 
   const onFile = async (file: File) => {
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "That file is over 5 MB", description: "Export a smaller PDF and try again.", tone: "error" });
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
     setUploading(true);
     try {
       const form = new FormData();
       form.append("file", file);
       form.append("is_master", "true");
       const created = await upload<Resume>("/resumes/upload", form);
-      toast({ title: "Resume imported", description: created.parse_method === "llm" ? "Parsed with Claude — please review the result." : "Parsed with the built-in parser — please review the result.", tone: "success" });
+      toast({ title: "Resume imported", description: created.parse_method === "llm" ? "Parsed with AI — please review the result." : "Parsed with the built-in parser — please review the result.", tone: "success" });
       setDirty(false);
       mutate();
     } catch (err) {
@@ -102,6 +108,16 @@ export default function ResumePage() {
   const diff = integrations?.linkedin.profile_diff;
 
   if (isLoading) return <Skeleton className="h-96" />;
+
+  // A 404 means there's no master resume yet (the upload prompt below); anything else is a load failure
+  if (error && !(error instanceof ApiError && error.status === 404)) {
+    return (
+      <div>
+        <PageHeader title="Resume Lab" description="Your master resume is the single source of truth — every tailored version is derived from it." />
+        <ErrorState error={error} onRetry={() => mutate()} title="Couldn't load your resume" />
+      </div>
+    );
+  }
 
   if (error || !master) {
     return (
@@ -175,7 +191,7 @@ export default function ResumePage() {
             </CardHeader>
             {!integrations?.linkedin.connected && (
               <CardContent className="text-sm text-muted-foreground">
-                Connect LinkedIn with the Chrome extension in <Link href="/dashboard/settings?tab=integrations" className="text-primary hover:underline">Settings</Link>.
+                Connect LinkedIn with the Chrome extension in <Link href="/dashboard/settings?tab=integrations" className="text-primary underline underline-offset-4">Settings</Link>.
               </CardContent>
             )}
           </Card>

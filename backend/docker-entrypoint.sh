@@ -1,5 +1,5 @@
 #!/bin/sh
-# Role-based entrypoint: api | worker | beat | migrate | seed | <any command>
+# Role-based entrypoint: api | worker | beat | worker-beat | migrate | seed | <any command>
 set -e
 
 case "$1" in
@@ -14,6 +14,13 @@ case "$1" in
     ;;
   beat)
     exec celery -A app.worker.celery_app beat --loglevel "${LOG_LEVEL:-INFO}" -s /data/celerybeat-schedule
+    ;;
+  worker-beat)
+    # One small instance for both (the public demo, docs/DEPLOY.md). Run exactly one of these: two would
+    # both schedule every scan and the nightly reset.
+    exec celery -A app.worker.celery_app worker -B -Q default,browser \
+      --concurrency "${WORKER_CONCURRENCY:-2}" --max-tasks-per-child 50 --loglevel "${LOG_LEVEL:-INFO}" \
+      -s /data/celerybeat-schedule
     ;;
   migrate)
     exec python scripts/migrate.py

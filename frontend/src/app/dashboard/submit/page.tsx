@@ -3,17 +3,19 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion, type Variants } from "framer-motion";
+import { AnimatePresence, motion, type Variants } from "framer-motion";
 import {
   AlertTriangle, ArrowUpRight, Bot, Building2, Check, CheckCheck, Copy, FileText, Layers, ListChecks, MapPin, Send, SkipForward,
   Undo2, X, ZoomIn,
 } from "lucide-react";
 import { CompanyBadge } from "@/components/company-badge";
 import { EmptyState } from "@/components/empty-state";
+import { ErrorState } from "@/components/error-state";
 import { IAppliedButton } from "@/components/i-applied-button";
 import { Modal } from "@/components/modal";
 import { EASE_OUT } from "@/components/motion";
 import { PageHeader } from "@/components/page-header";
+import { SendingSoon } from "@/components/sending-soon";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { useAgentStatus, useSubmitQueue } from "@/hooks/use-applications";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion";
 import { ApiError, post } from "@/lib/api-client";
 import type { BotMissing, DirectSubmitResponse, ReviewRow, SubmitQueueItem } from "@/lib/types";
 import { PLATFORM_LABELS, cn, timeAgo, titleCase } from "@/lib/utils";
@@ -65,7 +68,7 @@ function siteName(item: SubmitQueueItem) {
 }
 
 function Kbd({ children }: { children: React.ReactNode }) {
-  return <kbd className="border px-1.5 py-0.5 font-mono text-[11px] text-foreground">{children}</kbd>;
+  return <kbd className="rounded border px-1.5 py-0.5 font-mono text-[11px] text-foreground">{children}</kbd>;
 }
 
 /** The inline editor a ✗ Fix opens: a dropdown for choices, a text box for long answers, an input otherwise. */
@@ -144,7 +147,7 @@ function SheetRow({ row, state, focused, readOnly, rowRef, onFocus, onConfirm, o
   onCancel: () => void;
   onUndo: () => void;
 }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   const attention = needsYou(row, state.value) && state.status !== "confirmed";
   const empty = !state.value.trim();
   const blocked = blocksConfirm(row, state.value);
@@ -178,6 +181,9 @@ function SheetRow({ row, state, focused, readOnly, rowRef, onFocus, onConfirm, o
                 {row.label}{row.required && <span className="text-primary" aria-label="required"> *</span>}
               </p>
               {row.kind === "profile" && <Badge tone="muted">profile</Badge>}
+              {row.source === "llm" && !state.edited && (
+                <Badge tone="info" title="Written by AI from your resume: check it, and edit it if it doesn't sound like you">AI-written</Badge>
+              )}
               {row.flagged && row.confidence != null && <Badge tone="warning">{Math.round(row.confidence * 100)}% sure</Badge>}
               {state.edited && <Badge tone="outline">edited</Badge>}
             </div>
@@ -245,8 +251,8 @@ function SheetRow({ row, state, focused, readOnly, rowRef, onFocus, onConfirm, o
 function SubmitInner() {
   const params = useSearchParams();
   const toast = useToast();
-  const reduce = useReducedMotion();
-  const { data, isLoading, mutate } = useSubmitQueue();
+  const reduce = useReducedMotionSafe();
+  const { data, isLoading, error, mutate } = useSubmitQueue();
   const { data: status, mutate: refreshStatus } = useAgentStatus();
   const [currentId, setCurrentId] = useState<string | null>(() => params.get("id"));
   const [done, setDone] = useState<Set<string>>(new Set()); // submitted / applied here: gone before the refetch lands
@@ -475,10 +481,15 @@ function SubmitInner() {
       <PageHeader eyebrow="Mass apply" title="Ready to submit"
         description="The agent filled these forms and stopped short of Submit. Say yes or no to each prefilled item, fix anything that's wrong right here, then send it with one click."
         actions={<Link href="/dashboard/review" className={buttonVariants({ variant: "ghost" })}><Layers /> Swipe Review</Link>} />
+      <SendingSoon />
 
       {isLoading ? (
         <div className="mx-auto max-w-[880px] space-y-3">
           <Skeleton className="h-40" /><Skeleton className="h-20" /><Skeleton className="h-20" /><Skeleton className="h-20" />
+        </div>
+      ) : error && !data ? (
+        <div className="mx-auto max-w-[880px]">
+          <ErrorState error={error} onRetry={() => mutate()} title="Couldn't load what's ready to submit" />
         </div>
       ) : !item ? (
         <div className="mx-auto max-w-[880px]">
@@ -491,7 +502,7 @@ function SubmitInner() {
         <div className="mx-auto max-w-[880px]">
           <div className="mb-3 flex items-end justify-between gap-3">
             <p className="label-caps text-muted-foreground" aria-live="polite">
-              <span className="mr-1 font-display text-2xl leading-none text-foreground tabular-nums">{index + 1}</span> of {count}
+              <span className="mr-1 font-mono font-bold tracking-tight text-2xl leading-none text-foreground tabular-nums">{index + 1}</span> of {count}
             </p>
             {attention > 0 && !item.blocker && (
               <p className="label-caps flex items-center gap-1.5 text-[10px] text-warning">
@@ -502,7 +513,7 @@ function SubmitInner() {
 
           <AnimatePresence mode="wait" initial={false} custom={exit}>
             <motion.section key={item.id} custom={exit} variants={cardVariants} initial="enter" animate="center" exit="exit"
-              aria-label={`${job?.role_title} at ${job?.company_name}`} className="border border-foreground/70 bg-background">
+              aria-label={`${job?.role_title} at ${job?.company_name}`} className="rounded-xl border bg-card shadow-sm">
               <header className="flex flex-col gap-4 border-b border-line/60 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
                 <div className="min-w-0 flex-1">
                   <p className="label-caps text-[10px] text-muted-foreground">
@@ -527,7 +538,7 @@ function SubmitInner() {
                 </div>
                 <div className="flex items-start justify-between gap-4 sm:flex-col sm:items-end">
                   <div className="flex flex-col items-start sm:items-end">
-                    <span className={cn("font-display text-5xl leading-none tabular-nums", (item.match_score ?? 0) >= 70 ? "text-primary" : "text-foreground")}>
+                    <span className={cn("font-mono font-bold tracking-tight text-5xl leading-none tabular-nums", (item.match_score ?? 0) >= 70 ? "text-primary" : "text-foreground")}>
                       {item.match_score ?? "—"}
                     </span>
                     <span className="label-caps mt-1 text-[9px] text-muted-foreground">match</span>

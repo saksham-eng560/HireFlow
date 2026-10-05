@@ -2,6 +2,23 @@
 
 ## Master Project Plan (v5 — Final Polished)
 
+> **Status.** This is the original design the code was built from; code comments cite its sections as
+> "PLAN.md §N". Where the build differs, the code and these docs are current:
+> [ARCHITECTURE.md](ARCHITECTURE.md), [HIREFLOW_PLAN.md](HIREFLOW_PLAN.md) (the resume-ready plan: rename,
+> theme, onboarding, guardrails, polish, deployment) and [DEPLOY.md](DEPLOY.md). The main differences:
+>
+> - **Review**: jobs go through a Swipe Review deck; keeping one is the approval, with a 10-minute undo
+>   window before an automatic send, server-side daily and per-company caps, and a dry-run mode.
+> - **Auth**: built-in accounts (bcrypt, JWT in httpOnly cookies, CSRF origin checks), not Clerk; Google
+>   OAuth is only for Gmail and Calendar.
+> - **AI**: Anthropic, OpenAI or a local Ollama model in a configurable order, schema-validated replies,
+>   per-user daily budgets, and a heuristic fallback for every step (see [AI_MODELS.md](AI_MODELS.md)).
+> - **PDFs**: ReportLab. **Deployment**: one-command local mode, Docker Compose, or the public demo on
+>   Vercel + Render + Neon + Upstash + R2 ([DEPLOY.md](DEPLOY.md)); ECS remains an option
+>   ([SELF_HOSTING.md](SELF_HOSTING.md#deployment)).
+> - **Browsers**: Playwright sessions in the worker, isolated per application, rather than one container
+>   per session.
+
 > **Vision**: A fully autonomous, AI-powered career management agent that discovers jobs, tailors resumes, fills applications, manages recruiter communications, and schedules interviews — while keeping the human in the loop before every submission.
 
 ---
@@ -203,15 +220,15 @@ sequenceDiagram
 | **Backend** | Python 3.12 + FastAPI | Industry standard for AI/ML, scraping, async I/O. Auto-generated OpenAPI docs |
 | **Browser Automation** | Playwright | Handles SPAs, supports multiple browsers, built-in auto-wait, stealth mode plugins |
 | **Anti-Detection** | playwright-stealth + undetected-chromedriver | Bypass basic bot detection on LinkedIn, Indeed |
-| **LLM** | Anthropic Claude 3.5 Sonnet (primary) / GPT-4o (fallback) | Superior structured output, long context for JD analysis, reliable JSON formatting |
+| **LLM** | Anthropic (primary), OpenAI and Ollama (fallbacks) | Structured JSON outputs, long context for JD analysis; a heuristic fallback when none is configured |
 | **Database** | PostgreSQL 16 + pgvector | Relational integrity + vector similarity search for job-resume matching |
 | **Task Queue** | Celery + Redis | Battle-tested async task processing. Celery Beat for scheduled scans |
-| **Frontend** | Next.js 14 + Tailwind CSS + shadcn/ui | App router, RSC, great DX, Vercel deployment |
-| **Auth** | Clerk (or Supabase Auth) | OAuth2 with Google, secure token management, session handling |
+| **Frontend** | Next.js 15 + Tailwind CSS + shadcn/ui | App router, great DX, Vercel deployment |
+| **Auth** | Built-in accounts (bcrypt, JWT in httpOnly cookies) + Google OAuth for Gmail/Calendar | No third-party identity provider needed to self-host |
 | **Blob Storage** | Cloudflare R2 / AWS S3 | Store generated resume PDFs and screenshots |
 | **Proxy** | BrightData / Oxylabs residential proxies | Avoid IP bans from job boards |
 | **CAPTCHA** | 2Captcha / Anti-Captcha API | Handle CAPTCHAs on Workday and other portals |
-| **PDF Generation** | WeasyPrint / Puppeteer | Convert tailored resume JSON → polished PDF |
+| **PDF Generation** | ReportLab | Convert tailored resume JSON → ATS-friendly PDF, no browser needed |
 | **Email Parsing** | Gmail API + LLM extraction | Parse recruiter intent, extract interview details |
 | **Deployment** | Docker + AWS ECS Fargate | Containerized, serverless, auto-scaling |
 | **CI/CD** | GitHub Actions | Automated testing, linting, deployment on push |
@@ -648,7 +665,7 @@ LinkedIn's official API is extremely restricted. We use a **hybrid approach**:
 ## 6. Authentication & Security Model
 
 ### 6.1 User Authentication
-- **Clerk** handles signup/login with Google OAuth (required for Gmail/Calendar access)
+- Built-in signup/login (bcrypt passwords); Google OAuth connects Gmail and Calendar
 - JWT tokens for API authentication
 - Session management with httpOnly cookies
 
@@ -1228,68 +1245,8 @@ hireflow/
 
 ## 11. Development Phases & Milestones
 
-> **Status:** all six phases are implemented in this repository — see [README.md](README.md) for how to run it.
-> Deviations from the original plan are noted inline.
-
-### Phase 1: Foundation (Weeks 1–3)
-- [x] Project scaffolding (monorepo setup, Docker Compose)
-- [x] PostgreSQL database + Alembic migrations
-- [x] User authentication (Clerk + Google OAuth) — *built-in e-mail/password auth (bcrypt + JWT httpOnly cookies) instead of Clerk, so the app is fully self-hostable; Google sign-in included*
-- [x] Master resume upload & parsing (PDF → structured JSON via LLM) — *PDF, DOCX and TXT; heuristic parser when no API key is set*
-- [x] Basic Next.js dashboard skeleton
-- [x] User preferences settings page
-
-### Phase 2: Job Discovery Engine (Weeks 4–6)
-- [x] Abstract scraper interface
-- [x] LinkedIn job scraper (Playwright + session cookies)
-- [x] Greenhouse scraper (API-first)
-- [x] Lever scraper (API-first) — *plus Ashby, Workday and generic career pages (JSON-LD)*
-- [x] Indeed/Glassdoor scrapers — *plus Wellfound*
-- [x] Job deduplication logic
-- [x] pgvector embeddings for semantic matching
-- [x] LLM job match evaluation pipeline
-- [x] Celery Beat scheduled scanning
-
-### Phase 3: The Auto-Submitter (Weeks 7–10)
-- [x] Resume tailoring LLM pipeline — *with a truthfulness guard that reverts invented facts*
-- [x] Cover letter generator
-- [x] PDF generation engine (JSON → polished resume PDF)
-- [x] Form filler engine with field mapping
-- [x] LinkedIn Easy Apply submitter
-- [x] Greenhouse form submitter
-- [x] Lever form submitter
-- [x] Workday form submitter (complex — multi-page)
-- [x] "Pause & Approve" workflow with screenshots
-- [x] Approval notification system (WebSocket + email)
-- [x] Dashboard: application review & approval UI
-
-### Phase 4: Communication & Calendar (Weeks 11–13)
-- [x] Gmail API integration (OAuth + Pub/Sub webhooks) — *with polling fallback*
-- [x] Email intent parsing (LLM-powered)
-- [x] Auto-labeling recruiter emails
-- [x] Google Calendar event creation
-- [x] Interview prep note generation
-- [x] Interview reminder system (24h + 1h before)
-- [x] Dashboard: communications view
-- [x] Dashboard: interviews/calendar view
-
-### Phase 5: LinkedIn Sync & Intelligence (Weeks 14–15)
-- [x] Chrome extension for session cookie sync
-- [x] LinkedIn profile change detection
-- [x] Master resume sync from LinkedIn updates — *changes are suggested for review, never applied silently*
-- [x] Application status analytics
-- [x] Success rate dashboards
-- [x] Agent run history & audit logs
-
-### Phase 6: Hardening & Scale (Weeks 16–17)
-- [x] Residential proxy integration
-- [x] Human behavior emulation (typing speed, mouse movements)
-- [x] CAPTCHA handling (2Captcha integration) — *and Anti-Captcha*
-- [x] Comprehensive error handling & retry logic
-- [x] Rate limiting per platform
-- [x] Security audit (encryption, token rotation, RLS) — *AES-256-GCM at rest, short-lived scoped tokens, OAuth refresh; tenant isolation is enforced in every query (application-level) rather than Postgres RLS*
-- [x] Load testing with multiple concurrent users — *`backend/tests/load/locustfile.py`*
-- [x] E2E test suite
+The original week-by-week schedule is done. What's left is in the README's roadmap and
+[HIREFLOW_PLAN.md](HIREFLOW_PLAN.md).
 
 ---
 
@@ -1498,42 +1455,4 @@ hireflow/
 
 ## 20. Iterative Refinement History
 
-### Cycle 1 — Foundation
-Established the core skeleton: 7 primary requirements, initial 3-tier architecture, basic tech stack selection, and preliminary database tables (users, resumes, jobs, applications).
-
-### Cycle 2 — Data Model & Integrations
-- Added `pgvector` for semantic job-resume matching
-- Expanded database schema with `communications` and `interviews` tables
-- Added `application_status_history` for full audit trail
-- Detailed Gmail Pub/Sub webhook flow and Calendar event creation
-- Added `user_field_mappings` table for reusable form answers
-
-### Cycle 3 — Agent Brain & Workflow
-- Created the comprehensive Master Agent Prompt with strict JSON output schemas
-- Defined 5 evaluation criteria for job matching (skills, experience, industry, location, compensation)
-- Added detailed resume tailoring instructions with `changes_made` tracking
-- Designed the complete 5-phase agent workflow with Mermaid sequence diagrams
-- Added the "Pause & Approve" mechanism with screenshots
-
-### Cycle 4 — Platform Strategies & Infrastructure
-- Added per-platform form-filling strategies (LinkedIn, Greenhouse, Workday, Generic)
-- Detailed the complete file/folder structure with 60+ files
-- Expanded deployment strategy with specific AWS service configurations
-- Added anti-bot countermeasures: per-platform rate limits, human emulation parameters
-- Designed the notification system with multi-channel support
-
-### Cycle 5 — Production Hardening
-- Added comprehensive error handling matrix with escalation levels
-- Designed analytics dashboard with 9 key metrics
-- Added GDPR/CCPA compliance section with data export and deletion
-- Expanded testing strategy to 7 test types with coverage targets
-- Added CAPTCHA handling, proxy management, and browser fingerprint randomization
-- Created 4-version future roadmap through Enterprise tier
-- Added `agent_runs` table for complete execution audit logging
-- Refined the master prompt with behavioral rules and edge case handling
-
----
-
-> **This plan is a living document.** Update it as the project evolves.
->
-> **Next step**: Create the GitHub repository, initialize the project, and begin Phase 1.
+The five drafting cycles that produced this plan are in the git history of the original project.

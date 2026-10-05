@@ -67,6 +67,28 @@ def export_user_data(db: Session, user: User) -> dict[str, Any]:
     }
 
 
+def export_zip(db: Session, user: User) -> bytes:
+    """Everything: the data as JSON plus every file stored for you (resumes, tailored PDFs, form screenshots)."""
+    import io
+    import json
+    import zipfile
+
+    storage = get_storage()
+    prefix = user_prefix(user.id)
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("hireflow-data.json", json.dumps(export_user_data(db, user), indent=2, default=str))
+        for key in storage.list_prefix(prefix):
+            try:
+                archive.writestr(f"files/{key[len(prefix) + 1:]}", storage.read(key))
+            except Exception as exc:  # noqa: BLE001 - one unreadable file doesn't stop the export
+                logger.warning("Export: could not read %s: %s", key, exc)
+        archive.writestr("README.txt", "Your HireFlow data.\n\nhireflow-data.json: your account, resumes, applications, "
+                         "e-mails, interviews, activity and notifications.\nfiles/: every file stored for you.\n"
+                         "Passwords and access tokens are never exported.\n")
+    return buffer.getvalue()
+
+
 def delete_user_data(db: Session, user: User) -> None:
     """Permanently wipe resumes (DB + storage), applications, communications, tokens and the account."""
     try:

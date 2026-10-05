@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, cloneElement, isValidElement, useEffect, useId, useState } from "react";
 import useSWR from "swr";
 import { AlertTriangle, Bot, CheckCircle2, Copy, Cpu, Download, KeyRound, Link2, Mail, Puzzle, RefreshCw, Save, Trash2, Zap } from "lucide-react";
+import { ErrorState } from "@/components/error-state";
 import { PageHeader } from "@/components/page-header";
 import { TagInput } from "@/components/tag-input";
 import { Badge } from "@/components/ui/badge";
@@ -14,39 +15,50 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Select } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { DemoNotice } from "@/components/demo";
+import { GatedSources } from "@/components/gated-sources";
+import { cleanProfiles, ProfileLinksEditor, profileErrors } from "@/components/onboarding/profile-links";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
 import { useIntegrations, useMe } from "@/hooks/use-applications";
 import { ApiError, api, del, fetcher, patch, post, put } from "@/lib/api-client";
-import type { FieldMapping, Integrations, LLMTestResult, LocationFocus, OllamaPullProgress, Preferences, StandardField, StudentInfo } from "@/lib/types";
+import type { FieldMapping, Integrations, LLMTestResult, LocationFocus, OllamaPullProgress, OnboardingProfiles, Preferences, StandardField, StudentInfo } from "@/lib/types";
 import { PLATFORM_LABELS, cn, timeAgo } from "@/lib/utils";
 
-const ALL_PLATFORMS = ["internshala", "internships", "greenhouse", "lever", "ashby", "workday", "linkedin", "indeed", "glassdoor", "wellfound", "generic"];
+// LinkedIn, Internshala, Indeed and Glassdoor forbid automation: they're turned on in their own section, with your OK
+const ALL_PLATFORMS = ["internships", "greenhouse", "lever", "ashby", "workday", "wellfound", "generic"];
 const pill = (on: boolean) => cn("rounded-full border px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
   on ? "border-primary bg-primary text-primary-foreground" : "border-foreground/30 hover:border-foreground");
 
 const PRESETS = [
   { name: "ai-engineer", title: "AI engineer · Python", text: "From your resume: AI engineer, generative AI, LLM and Python / FastAPI internships, plus big tech software internships. Java, Spring Boot and data-science / analyst roles are left out. Only changes what you look for." },
   { name: "india-internships", title: "India · Summer 2027", text: "Internships only, ~90% in India with Delhi NCR first: Internshala, LinkedIn India and Indeed India, plus the Summer 2027 lists." },
-  { name: "internships", title: "Internships", text: "Intern roles, 4,000+ curated listings (SimplifyJobs, vanshb03) plus 110 startup boards, 100 applications/day." },
-  { name: "startups", title: "Startups", text: "Adds 110 startup Greenhouse, Ashby and Lever boards to your sources, keeps your roles and job types." },
+  { name: "internships", title: "Internships", text: "Intern roles, the curated SimplifyJobs and vanshb03 lists plus 107 startup boards, and the daily limit at the server's cap (25)." },
+  { name: "startups", title: "Startups", text: "Adds 107 startup Greenhouse, Ashby and Lever boards to your sources, keeps your roles and job types." },
   { name: "new-grad", title: "New grad", text: "Entry-level full-time roles from the SimplifyJobs new-grad list plus the startup boards. Turns “Internships only” off." },
 ] as const;
 
+/** While a settings panel's data loads (or if it fails to). */
+function PanelPlaceholder({ error, onRetry }: { error?: unknown; onRetry?: () => unknown }) {
+  if (error) return <ErrorState error={error} onRetry={onRetry} title="Couldn't load these settings" />;
+  return <div className="space-y-4" aria-busy="true"><Skeleton className="h-40" /><Skeleton className="h-64" /></div>;
+}
+
 function MassApplyPanel() {
-  const { data: me, mutate } = useMe();
+  const { data: me, error: meError, mutate } = useMe();
   const toast = useToast();
   const [prefs, setPrefs] = useState<Preferences | null>(null);
   const [applying, setApplying] = useState<string | null>(null);
   const { saving, run } = useSaver();
   useEffect(() => { if (me) setPrefs(me.preferences); }, [me]);
-  if (!prefs) return null;
+  if (!prefs) return <PanelPlaceholder error={meError} onRetry={() => mutate()} />;
   const set = <K extends keyof Preferences>(k: K, v: Preferences[K]) => setPrefs({ ...prefs, [k]: v });
   const save = () => run(async () => {
     await put("/users/me/preferences", { preferences: {
-      review_mode: prefs.review_mode, resume_strategy: prefs.resume_strategy, auto_submit_kept: prefs.auto_submit_kept, trust_generated_answers: prefs.trust_generated_answers,
+      review_mode: prefs.review_mode, resume_strategy: prefs.resume_strategy, auto_submit_kept: prefs.auto_submit_kept, dry_run: prefs.dry_run, trust_generated_answers: prefs.trust_generated_answers,
       auto_keep_min_score: prefs.auto_keep_min_score, max_jobs_per_source: prefs.max_jobs_per_source,
       exclude_no_sponsorship: prefs.exclude_no_sponsorship, max_applications_per_day: prefs.max_applications_per_day,
       internshala_share: prefs.internshala_share ?? 25, internshala_per_scan: prefs.internshala_per_scan ?? 10,
@@ -111,8 +123,11 @@ function MassApplyPanel() {
               ))}
             </div>
           </Row>
-          <Row label="Apply automatically after I keep" hint="Kept jobs are submitted as soon as the form is filled. Blank eligibility questions always wait for you.">
+          <Row label="Apply automatically after I keep" hint="Once a kept job's form is filled, it waits 10 minutes in “Sending soon” (so you can stop it), then it's sent. Blank eligibility questions always wait for you.">
             <Switch checked={prefs.auto_submit_kept} onCheckedChange={(v) => set("auto_submit_kept", v)} label="Apply automatically after keeping" />
+          </Row>
+          <Row label="Dry run" hint="Forms are filled and screenshotted, but Submit is never clicked: see exactly what would be sent before anything is. Each one waits in Ready to submit with its screenshot.">
+            <Switch checked={!!prefs.dry_run} onCheckedChange={(v) => set("dry_run", v)} label="Dry run" />
           </Row>
           <Row label="Trust AI answers to open questions" hint="“Why this company?”-style answers written by the agent won't hold a kept job back. Visa, work authorization and background questions are never guessed.">
             <Switch checked={prefs.trust_generated_answers} onCheckedChange={(v) => set("trust_generated_answers", v)} label="Trust generated answers" />
@@ -227,11 +242,11 @@ function StudentRows({ prefs, set }: {
 }
 
 function PreferencesForm({ sourcesOnly = false }: { sourcesOnly?: boolean }) {
-  const { data: me, mutate } = useMe();
+  const { data: me, error: meError, mutate } = useMe();
   const [prefs, setPrefs] = useState<Preferences | null>(null);
   const { saving, run } = useSaver();
   useEffect(() => { if (me) setPrefs(me.preferences); }, [me]);
-  if (!prefs) return null;
+  if (!prefs) return <PanelPlaceholder error={meError} onRetry={() => mutate()} />;
   const set = <K extends keyof Preferences>(k: K, v: Preferences[K]) => setPrefs({ ...prefs, [k]: v });
   const setSource = (k: keyof Preferences["sources"], v: string[]) => setPrefs({ ...prefs, sources: { ...prefs.sources, [k]: v } });
   const save = () => run(async () => { await put("/users/me/preferences", { preferences: prefs }); await mutate(); });
@@ -244,7 +259,7 @@ function PreferencesForm({ sourcesOnly = false }: { sourcesOnly?: boolean }) {
           <CardDescription>Where the agent looks. ATS boards use public APIs (fast, no login). Job boards search by your target roles & locations.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Row label="Platforms to scan" hint="Indeed, Glassdoor and Wellfound use a real browser and may need residential proxies to avoid bot blocks.">
+          <Row label="Platforms to scan" hint="Wellfound uses a real browser and may need residential proxies to avoid bot blocks. LinkedIn, Internshala, Indeed and Glassdoor are below: they need your OK first.">
             <div className="flex flex-wrap gap-2">
               {ALL_PLATFORMS.map((p) => (
                 <button key={p} type="button" onClick={() => set("platforms", prefs.platforms.includes(p) ? prefs.platforms.filter((x) => x !== p) : [...prefs.platforms, p])}
@@ -422,35 +437,49 @@ function FocusCard({ prefs, setPrefs, onSave, saving }: {
 
 function ProfileForm() {
   const { data: me, mutate } = useMe();
-  const [form, setForm] = useState({ full_name: "", phone: "", location: "", linkedin_url: "" });
+  const [form, setForm] = useState({ full_name: "", phone: "", location: "" });
+  const [links, setLinks] = useState<OnboardingProfiles>({ linkedin_url: null, github_url: null, portfolio_url: null, profile_links: [] });
+  const [showErrors, setShowErrors] = useState(false);
   const { saving, run } = useSaver();
   useEffect(() => {
-    if (me) setForm({ full_name: me.full_name, phone: me.phone || "", location: me.location || "", linkedin_url: me.linkedin_url || "" });
+    if (!me) return;
+    setForm({ full_name: me.full_name, phone: me.phone || "", location: me.location || "" });
+    setLinks({ linkedin_url: me.linkedin_url, github_url: me.github_url, portfolio_url: me.portfolio_url, profile_links: me.profile_links || [] });
   }, [me]);
+  const save = () => {
+    setShowErrors(true);
+    if (!form.full_name.trim() || Object.values(profileErrors(links)).some(Boolean)) return;
+    run(async () => { await patch("/users/me", { ...form, ...cleanProfiles(links) }); await mutate(); setShowErrors(false); });
+  };
   return (
     <Card>
-      <CardHeader><CardTitle>Profile</CardTitle><CardDescription>{me?.email}</CardDescription></CardHeader>
+      <CardHeader>
+        <CardTitle>Profile & links</CardTitle>
+        <CardDescription>{me?.email} · Forms use these for your name, contact details, LinkedIn, GitHub and other profile questions.</CardDescription>
+      </CardHeader>
       <CardContent>
-        <div className="grid max-w-2xl gap-4 sm:grid-cols-2">
-          {([["full_name", "Full name"], ["phone", "Phone"], ["location", "Location"], ["linkedin_url", "LinkedIn URL"]] as const).map(([k, label]) => (
+        <div className="grid max-w-2xl gap-4 sm:grid-cols-3">
+          {([["full_name", "Full name"], ["phone", "Phone"], ["location", "Location"]] as const).map(([k, label]) => (
             <div key={k} className="space-y-1.5"><Label htmlFor={`profile-${k}`}>{label}</Label><Input id={`profile-${k}`} value={form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })} /></div>
           ))}
         </div>
-        <Button className="mt-4" loading={saving} onClick={() => run(async () => { await patch("/users/me", form); await mutate(); })}><Save /> Save profile</Button>
+        {showErrors && !form.full_name.trim() && <p role="alert" className="mt-2 text-xs font-medium text-destructive">Your name can’t be empty</p>}
+        <div className="mt-6 max-w-2xl"><ProfileLinksEditor value={links} onChange={setLinks} showErrors={showErrors} /></div>
+        <Button className="mt-6" loading={saving} onClick={save}><Save /> Save profile</Button>
       </CardContent>
     </Card>
   );
 }
 
 function FieldMappingsForm() {
-  const { data, mutate } = useSWR<{ mappings: FieldMapping[]; standard_fields: Record<string, StandardField> }>("/users/me/field-mappings", fetcher);
+  const { data, error, mutate } = useSWR<{ mappings: FieldMapping[]; standard_fields: Record<string, StandardField> }>("/users/me/field-mappings", fetcher);
   const [values, setValues] = useState<Record<string, string>>({});
   const [custom, setCustom] = useState({ name: "", value: "" });
   const { saving, run } = useSaver();
   useEffect(() => {
     if (data) setValues(Object.fromEntries(data.mappings.map((m) => [m.field_name, m.field_value])));
   }, [data]);
-  if (!data) return null;
+  if (!data) return <PanelPlaceholder error={error} onRetry={() => mutate()} />;
   const standardKeys = Object.keys(data.standard_fields);
   const customMappings = data.mappings.filter((m) => !standardKeys.includes(m.field_name));
   const save = () => run(async () => {
@@ -516,7 +545,7 @@ const OLLAMA_SETUPS: { id: string; title: string; steps: React.ReactNode[]; env:
     id: "mac",
     title: "This computer (Mac)",
     steps: [
-      <>Install the Ollama app from <a className="text-primary underline-offset-4 hover:underline" href="https://ollama.com/download" target="_blank" rel="noreferrer">ollama.com/download</a> and open it once.</>,
+      <>Install the Ollama app from <a className="text-primary underline underline-offset-4" href="https://ollama.com/download" target="_blank" rel="noreferrer">ollama.com/download</a> and open it once.</>,
       <>Add these lines to <code>.env</code> in the HireFlow folder.</>,
       <>Restart with <code>./start.sh --ollama</code>. It checks Ollama and downloads the model (about 3.4 GB) for you.</>,
     ],
@@ -536,7 +565,7 @@ const OLLAMA_SETUPS: { id: string; title: string; steps: React.ReactNode[]; env:
     id: "cloud",
     title: "Ollama Cloud",
     steps: [
-      <>Create an API key at <a className="text-primary underline-offset-4 hover:underline" href="https://ollama.com/settings/keys" target="_blank" rel="noreferrer">ollama.com/settings/keys</a>.</>,
+      <>Create an API key at <a className="text-primary underline underline-offset-4" href="https://ollama.com/settings/keys" target="_blank" rel="noreferrer">ollama.com/settings/keys</a>.</>,
       <>Add these lines to <code>.env</code>, then paste the key after <code>OLLAMA_API_KEY=</code> in the file itself.</>,
       <>Restart the app. There is nothing to download. The free plan answers one request at a time.</>,
     ],
@@ -556,7 +585,7 @@ function CopyBlock({ text, label }: { text: string; label: string }) {
   };
   return (
     <div className="relative">
-      <pre className="overflow-x-auto border border-border bg-muted p-3 pr-12 font-mono text-xs leading-relaxed">{text}</pre>
+      <pre className="rounded-lg overflow-x-auto border border-border bg-muted p-3 pr-12 font-mono text-xs leading-relaxed">{text}</pre>
       <Button size="icon" variant="outline" className="absolute right-2 top-2 h-7 w-7" aria-label={`Copy ${label}`} onClick={copy}><Copy /></Button>
     </div>
   );
@@ -713,7 +742,7 @@ function AIModelCard({ integ, refresh }: { integ: Integrations; refresh: () => P
             )}
           </div>
           {result && (
-            <div className={cn("border p-3", result.ok ? "border-success/60" : "border-primary/60")} role="status">
+            <div className={cn("rounded-lg border p-3", result.ok ? "border-success/60" : "border-primary/60")} role="status">
               <p className="flex flex-wrap items-center gap-2 font-medium">
                 {result.ok ? <CheckCircle2 className="h-4 w-4 text-success" /> : <AlertTriangle className="h-4 w-4 text-primary" />}
                 {result.ok ? `Answered in ${(result.latency_ms / 1000).toFixed(1)} s` : "The AI didn't answer"}
@@ -756,7 +785,7 @@ function AIModelCard({ integ, refresh }: { integ: Integrations; refresh: () => P
 }
 
 function IntegrationsPanel() {
-  const { data: integ, mutate } = useIntegrations();
+  const { data: integ, error: integError, mutate } = useIntegrations();
   const { data: me, mutate: mutateMe } = useMe();
   const [token, setToken] = useState<{ token: string; api_url: string } | null>(null);
   const [webhooks, setWebhooks] = useState({ discord: "", slack: "" });
@@ -772,7 +801,7 @@ function IntegrationsPanel() {
         popups: me.preferences.notification_popups !== false });
     }
   }, [me]);
-  if (!integ) return null;
+  if (!integ) return <PanelPlaceholder error={integError} onRetry={() => mutate()} />;
 
   const connectGoogle = () => run(async () => {
     const { url } = await api<{ url: string }>("/auth/google/connect");
@@ -781,6 +810,7 @@ function IntegrationsPanel() {
 
   return (
     <div className="space-y-6">
+      <DemoNotice>In the demo, Google, the Chrome extension, job-site logins and webhooks are turned off: nothing real is connected or sent.</DemoNotice>
       <AIModelCard integ={integ} refresh={mutate} />
 
       <Card>
@@ -1000,8 +1030,11 @@ function PrivacyPanel() {
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader><CardTitle>Export your data</CardTitle><CardDescription>Download everything stored about you as JSON (GDPR / CCPA right to access).</CardDescription></CardHeader>
-        <CardContent><a href="/api/v1/users/me/export" className={buttonVariants({ variant: "outline" })}><Download /> Download export</a></CardContent>
+        <CardHeader><CardTitle>Download my data</CardTitle><CardDescription>Everything stored about you (GDPR / CCPA right to access): your data as JSON, plus every file (resumes, tailored PDFs, form screenshots) in the .zip. Passwords and access tokens are never included.</CardDescription></CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          <a href="/api/v1/users/me/export.zip" className={buttonVariants({ variant: "outline" })}><Download /> Data and files (.zip)</a>
+          <a href="/api/v1/users/me/export" className={buttonVariants({ variant: "ghost" })}><Download /> Data only (.json)</a>
+        </CardContent>
       </Card>
       <Card className="border-destructive/40">
         <CardHeader><CardTitle className="text-destructive">Delete my account</CardTitle><CardDescription>Permanently deletes your resumes (database and file storage), applications, e-mails, interviews, OAuth tokens and account. This cannot be undone.</CardDescription></CardHeader>
@@ -1033,12 +1066,12 @@ function SettingsInner() {
           <TabsTrigger value="sources">Job sources</TabsTrigger>
           <TabsTrigger value="answers">Saved answers</TabsTrigger>
           <TabsTrigger value="integrations">Integrations</TabsTrigger>
-          <TabsTrigger value="profile">Profile</TabsTrigger>
+          <TabsTrigger value="profile">Profile & links</TabsTrigger>
           <TabsTrigger value="privacy">Privacy</TabsTrigger>
         </TabsList>
         <TabsContent value="mass-apply"><MassApplyPanel /></TabsContent>
         <TabsContent value="preferences"><PreferencesForm /></TabsContent>
-        <TabsContent value="sources"><PreferencesForm sourcesOnly /></TabsContent>
+        <TabsContent value="sources"><div className="space-y-6"><PreferencesForm sourcesOnly /><GatedSources /></div></TabsContent>
         <TabsContent value="answers"><FieldMappingsForm /></TabsContent>
         <TabsContent value="integrations"><IntegrationsPanel /></TabsContent>
         <TabsContent value="profile"><ProfileForm /></TabsContent>

@@ -60,6 +60,8 @@ export interface Preferences {
   scan_top_companies?: boolean;
   review_mode: "swipe" | "auto";
   auto_submit_kept: boolean;
+  /** Forms are filled and screenshotted, but Submit is never clicked. */
+  dry_run: boolean;
   trust_generated_answers: boolean;
   resume_strategy: "original" | "light" | "full";
   auto_keep_min_score: number | null;
@@ -86,6 +88,78 @@ export interface LocationFocus {
   country_share: number;
 }
 
+export interface ProfileLink {
+  label: string;
+  url: string;
+}
+
+export type RemotePreference = "remote" | "hybrid" | "onsite" | "any";
+export type AnswerKey =
+  | "work_authorization" | "over_18" | "requires_sponsorship" | "earliest_start_date" | "availability_months" | "willing_to_relocate"
+  | "notice_period" | "pronouns" | "gender" | "race_ethnicity" | "hispanic_latino" | "veteran_status" | "disability_status";
+
+export interface OnboardingStepInfo {
+  id: number;
+  key: "welcome" | "resume" | "profiles" | "targets" | "answers" | "apply" | "connect" | "done";
+  title: string;
+  required: boolean;
+  skippable: boolean;
+  done: boolean;
+}
+
+export interface OnboardingProfiles {
+  linkedin_url: string | null;
+  github_url: string | null;
+  portfolio_url: string | null;
+  profile_links: ProfileLink[];
+}
+
+export interface OnboardingTargets {
+  target_roles: string[];
+  target_locations: string[];
+  remote_preference: RemotePreference;
+  location_focus: LocationFocus | null;
+  internship_season: string | null;
+  internships_only: boolean | null;
+  year_of_study: number | null;
+  graduation_year: number | null;
+  focus_skills: string[];
+  avoid_skills: string[];
+  expected_stipend: number | null;
+}
+
+export interface OnboardingApply {
+  review_mode: "swipe" | "auto";
+  auto_submit_kept: boolean;
+  max_applications_per_day: number;
+  resume_strategy: "original" | "light" | "full";
+  cover_letter_enabled: boolean;
+}
+
+/** GET /users/me/onboarding: progress plus the saved data that prefills each step. */
+export interface OnboardingState {
+  step: number;
+  completed: boolean;
+  completed_at: string | null;
+  steps: OnboardingStepInfo[];
+  missing: string[];
+  recommended: string[];
+  demo_mode: boolean;
+  daily_cap_ceiling: number;
+  presets: string[];
+  data: {
+    welcome: { full_name: string; email: string; phone: string | null; location: string | null; timezone: string | null };
+    resume: { resume_id: string | null; filename: string | null };
+    profiles: OnboardingProfiles;
+    targets: OnboardingTargets;
+    answers: Record<AnswerKey, string | null>;
+    apply: OnboardingApply;
+    connect: { linkedin_consent: boolean; internshala_consent: boolean; google_connected: boolean;
+      linkedin_connected: boolean; internshala_connected: boolean };
+  };
+  run?: AgentRun | null;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -93,6 +167,11 @@ export interface User {
   phone: string | null;
   location: string | null;
   linkedin_url: string | null;
+  github_url: string | null;
+  portfolio_url: string | null;
+  profile_links: ProfileLink[];
+  onboarding_step: number;
+  onboarding_completed_at: string | null;
   has_password: boolean;
   google_connected: boolean;
   google_email: string | null;
@@ -241,6 +320,9 @@ export interface ApplicationSummary {
   created_at: string;
   updated_at: string;
   submitted_at: string | null;
+  /** Approved but held until then ("Sending soon", or a daily / per-company limit); hold_reason says which. */
+  send_after: string | null;
+  hold_reason: string | null;
   job: Job | null;
   /** You clicked "I Applied" (applied on your own) rather than the agent submitting it. */
   self_applied?: boolean;
@@ -423,6 +505,15 @@ export interface AgentStatus {
   linkedin_connected: boolean;
   to_review: number;
   review_mode: "swipe" | "auto";
+  /** Approved and waiting to go out: the undo window of an automatic submit, or a daily / per-company limit. */
+  sending_soon: number;
+  /** "Pause everything" is on: nothing is scanned, prepared or sent. */
+  paused: boolean;
+  paused_at: string | null;
+  dry_run: boolean;
+  /** AI usage meter: calls made for you today (UTC) and the daily budget (0 = no limit). */
+  ai_calls_today: number;
+  ai_daily_limit: number;
 }
 
 export interface ReviewCard {

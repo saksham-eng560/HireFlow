@@ -73,7 +73,9 @@ class TopCompaniesScraper(BaseScraper):
         return self._keep([j for j in found if match_company(j.company_name) is company], quiet, company)
 
     def search(self, query: SearchQuery) -> list[ScrapedJob]:
-        jobs = self.map_sources(tasks(), lambda task: self._one(task, query), query, "company")
+        # LinkedIn's terms forbid automation: its company searches run only if you've agreed to that risk
+        todo = [t for t in tasks() if not t.startswith("linkedin|") or "linkedin" in query.allowed_gated]
+        jobs = self.map_sources(todo, lambda task: self._one(task, query), query, "company")
         return jobs[: max(query.limit, 150)]
 
     def fetch_job(self, url: str) -> ScrapedJob | None:

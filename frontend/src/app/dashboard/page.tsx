@@ -8,9 +8,12 @@ import {
 import { ApplicationCard } from "@/components/application-card";
 import { StatTile, TimelineChart } from "@/components/analytics-charts";
 import { TunnelGrid } from "@/components/brand";
+import { LinksBanner } from "@/components/links-banner";
 import { FocusStrip } from "@/components/motion-graphics";
 import { ScanProgressPanel } from "@/components/scan-progress";
+import { useAuthConfig } from "@/components/demo";
 import { EmptyState } from "@/components/empty-state";
+import { ErrorState } from "@/components/error-state";
 import { PageHeader } from "@/components/page-header";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +30,7 @@ function Onboarding() {
   const { data: status } = useAgentStatus();
   const { data: integrations } = useIntegrations();
   const { data: answers } = useSWR<{ mappings: FieldMapping[] }>("/users/me/field-mappings", fetcher);
+  const { data: config } = useAuthConfig();
   if (!me || !status) return null;
   const prefs = me.preferences;
   const hasSources = Object.values(prefs.sources || {}).some((v) => (v || []).length) ||
@@ -39,7 +43,9 @@ function Onboarding() {
       label: "Apply the Internships preset (mass apply)", href: "/dashboard/settings?tab=mass-apply" },
     { done: saved.has("work_authorization") && saved.has("requires_sponsorship"),
       label: "Save work-authorization & visa answers", href: "/dashboard/settings?tab=answers" },
-    { done: !!integrations?.google.connected, label: "Connect Gmail & Calendar (optional)", href: "/dashboard/settings?tab=integrations" },
+    // Google can't be connected in the demo, so it isn't asked for there
+    ...(config?.demo_mode ? [] : [{ done: !!integrations?.google.connected, label: "Connect Gmail & Calendar (optional)",
+      href: "/dashboard/settings?tab=integrations" }]),
   ];
   const completed = steps.filter((s) => s.done).length;
   if (completed === steps.length) return null;
@@ -50,10 +56,11 @@ function Onboarding() {
           <CardTitle>Get your agent ready</CardTitle>
           <CardDescription className="mt-2">{completed} of {steps.length} done — kept jobs only auto-submit once your eligibility answers are saved.</CardDescription>
         </div>
-        <span className="font-display text-3xl tabular-nums text-primary">{Math.round((completed / steps.length) * 100)}%</span>
+        <span className="font-mono font-bold tracking-tight text-3xl tabular-nums text-primary">{Math.round((completed / steps.length) * 100)}%</span>
       </CardHeader>
       <div className="px-5"><Progress value={(completed / steps.length) * 100} /></div>
-      <CardContent className="mt-4 grid gap-px bg-border p-0 sm:grid-cols-2 sm:[&>:last-child]:col-span-2 xl:grid-cols-5 xl:[&>:last-child]:col-span-1">
+      <CardContent className={cn("mt-4 grid gap-px bg-border p-0 sm:grid-cols-2",
+        steps.length % 2 ? "sm:[&>:last-child]:col-span-2 xl:grid-cols-5 xl:[&>:last-child]:col-span-1" : "xl:grid-cols-4")}>
         {steps.map((s, i) => (
           <Link key={s.label} href={s.href} className="group flex items-start gap-3 bg-card p-4 text-sm transition-colors hover:bg-accent">
             {s.done ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> : <Circle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />}
@@ -91,7 +98,7 @@ function SwipeBand({ count, onScan, scanning, disabled }: { count: number; onSca
 export default function OverviewPage() {
   const { data: status } = useAgentStatus();
   const scan = useScan();
-  const { data: overview, isLoading } = useOverview();
+  const { data: overview, isLoading, error: overviewError, mutate: reloadOverview } = useOverview();
   const { data: pending } = useApplications({ status: "pending_approval", page_size: 5, sort: "match" });
   const { data: me } = useMe();
   const running = scan.running;
@@ -112,24 +119,27 @@ export default function OverviewPage() {
         }
       />
       <ScanProgressPanel scan={scan} />
+      {me && <LinksBanner me={me} />}
       {me && <FocusStrip prefs={me.preferences} />}
       <Onboarding />
       {status && <SwipeBand count={status.to_review} onScan={startScan} scanning={scanning || !!running} disabled={!status.has_master_resume} />}
 
-      <div className="grid border sm:grid-cols-2 sm:[&>:last-child]:col-span-2 xl:grid-cols-5 xl:[&>:last-child]:col-span-1 grid-lines">
+      {overviewError && !totals && <ErrorState error={overviewError} onRetry={() => reloadOverview()} title="Couldn't load your numbers" />}
+      <div className={cn("grid border sm:grid-cols-2 sm:[&>:last-child]:col-span-2 xl:grid-cols-5 xl:[&>:last-child]:col-span-1 grid-lines",
+        overviewError && !totals && "hidden")}>
         {isLoading || !totals ? (
           Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-[132px]" />)
         ) : (
           <>
-            <StatTile className="border-0" label="Awaiting your approval" value={totals.pending_approval} icon={<Hand className="h-4 w-4" />}
+            <StatTile className="rounded-none border-0" label="Awaiting your approval" value={totals.pending_approval} icon={<Hand className="h-4 w-4" />}
               hint={<Link href="/dashboard/applications?status=pending_approval" className="font-semibold text-primary hover:underline">Review now →</Link>} />
-            <StatTile className="border-0" label="Applications sent" value={totals.applied} icon={<Send className="h-4 w-4" />}
+            <StatTile className="rounded-none border-0" label="Applications sent" value={totals.applied} icon={<Send className="h-4 w-4" />}
               hint={`${status?.applied_today ?? 0} of ${status?.daily_limit ?? 25} today`} />
-            <StatTile className="border-0" label="Response rate" value={`${overview.rates.response_rate}%`} icon={<Radar className="h-4 w-4" />}
+            <StatTile className="rounded-none border-0" label="Response rate" value={`${overview.rates.response_rate}%`} icon={<Radar className="h-4 w-4" />}
               hint={overview.rates.avg_days_to_response != null ? `~${overview.rates.avg_days_to_response} days to first reply` : `${totals.responses} responses`} />
-            <StatTile className="border-0" label="Interviews" value={totals.interviews} icon={<CalendarDays className="h-4 w-4" />}
+            <StatTile className="rounded-none border-0" label="Interviews" value={totals.interviews} icon={<CalendarDays className="h-4 w-4" />}
               hint={`${overview.rates.interview_rate}% of applications`} />
-            <StatTile className="border-0" label="Offers" value={totals.offers} icon={<Trophy className="h-4 w-4" />}
+            <StatTile className="rounded-none border-0" label="Offers" value={totals.offers} icon={<Trophy className="h-4 w-4" />}
               hint={`${(totals.preparing || 0) + (status?.approved || 0)} more in the pipeline`} />
           </>
         )}
@@ -178,7 +188,7 @@ export default function OverviewPage() {
           <CardContent className="space-y-2">
             {!overview?.upcoming_interviews.length && <p className="text-sm text-muted-foreground">No interviews scheduled yet.</p>}
             {overview?.upcoming_interviews.map((i) => (
-              <Link key={i.id} href={`/dashboard/interviews?id=${i.id}`} className="group block border p-3 transition-colors hover:border-foreground/60">
+              <Link key={i.id} href={`/dashboard/interviews?id=${i.id}`} className="rounded-lg group block border p-3 transition-colors hover:border-foreground/60">
                 <div className="flex items-center justify-between">
                   <p className="font-semibold">{i.company}</p>
                   <ArrowUpRight className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
@@ -198,7 +208,9 @@ export default function OverviewPage() {
             <CardDescription className="mt-2">Jobs discovered, applications submitted and employer responses per day</CardDescription>
           </CardHeader>
           <CardContent>
-            {overview ? <TimelineChart data={overview.timeline} /> : <Skeleton className="h-[260px]" />}
+            {overview ? <TimelineChart data={overview.timeline} />
+              : overviewError ? <p className="py-24 text-center text-sm text-muted-foreground">Not available right now.</p>
+              : <Skeleton className="h-[260px]" />}
           </CardContent>
         </Card>
         <Card>

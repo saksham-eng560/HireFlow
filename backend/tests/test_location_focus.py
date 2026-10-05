@@ -52,7 +52,9 @@ def test_defaults_target_internships_in_india() -> None:
     prefs = default_preferences()
     assert prefs["job_types"] == ["internship"] and prefs["internship_season"] == "Summer 2027"
     assert prefs["location_focus"]["country"] == "India" and prefs["location_focus"]["country_share"] == 90
-    assert "Delhi" in prefs["location_focus"]["prime_cities"] and "internshala" in prefs["platforms"]
+    assert "Delhi" in prefs["location_focus"]["prime_cities"]
+    # Sites whose terms forbid automation are opt-in (docs/HIREFLOW_PLAN.md §5.4)
+    assert not {"internshala", "linkedin", "indeed", "glassdoor"} & set(prefs["platforms"])
     assert FOCUS is not None and SEASON is not None and SEASON.label == "Summer 2027"
 
 

@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import useSWR from "swr";
 import { ArrowUpRight } from "lucide-react";
 import { BrushHeadline, Logo, TunnelGrid } from "@/components/brand";
+import { TryDemoButton, useAuthConfig } from "@/components/demo";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ApiError, fetcher, post } from "@/lib/api-client";
+import { ApiError, post } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 const ERRORS: Record<string, string> = {
@@ -27,7 +27,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const [fullName, setFullName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const { data: config } = useSWR<{ google_enabled: boolean; registration_enabled: boolean }>("/auth/config", fetcher);
+  const { data: config } = useAuthConfig();
 
   useEffect(() => {
     const e = params.get("error");
@@ -41,7 +41,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
     try {
       if (mode === "login") await post("/auth/login", { email, password });
       else await post("/auth/register", { email, password, full_name: fullName });
-      router.replace(mode === "register" ? "/dashboard?welcome=1" : next);
+      router.replace(mode === "register" ? "/onboarding" : next);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong");
     } finally {
@@ -50,7 +50,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
   };
 
   return (
-    <main className="noise grid min-h-screen bg-background lg:grid-cols-[1.1fr_1fr]">
+    <main className="grid min-h-screen bg-background lg:grid-cols-[1.1fr_1fr]">
       <section className="relative hidden flex-col justify-between overflow-hidden border-r border-line/60 p-10 lg:flex">
         <TunnelGrid className="absolute inset-0 opacity-60" />
         <Logo className="relative" />
@@ -93,10 +93,18 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
                 <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required
                   minLength={mode === "register" ? 8 : undefined} autoComplete={mode === "login" ? "current-password" : "new-password"} />
               </div>
-              {error && <p role="alert" className="border border-primary/60 bg-primary/10 p-3 text-sm text-primary">{error}</p>}
+              {error && <p role="alert" className="rounded-lg border border-primary/60 bg-primary/10 p-3 text-sm text-primary">{error}</p>}
               <Button type="submit" size="lg" className="w-full" loading={loading}>
                 {mode === "login" ? "Sign in" : "Create account"} <ArrowUpRight />
               </Button>
+              <TryDemoButton className="w-full [&>button]:w-full" label="Or try the demo, no sign-up" />
+              {mode === "register" && (
+                <p className="text-center text-xs text-muted-foreground">
+                  By creating an account you agree to the <Link href="/terms" className="font-semibold text-primary hover:underline">terms</Link> and{" "}
+                  <Link href="/responsible-use" className="font-semibold text-primary hover:underline">responsible use</Link>. See how your data is handled in the{" "}
+                  <Link href="/privacy" className="font-semibold text-primary hover:underline">privacy policy</Link>.
+                </p>
+              )}
             </form>
             {config?.google_enabled && (
               <>

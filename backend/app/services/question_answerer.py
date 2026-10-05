@@ -34,6 +34,8 @@ STANDARD_FIELDS: dict[str, dict[str, Any]] = {
     "salary_expectation": {"label": "Salary expectation (leave empty to use your preferences)", "type": "text"},
     "expected_stipend": {"label": "Expected internship stipend per month, e.g. 15000 (INR)", "type": "number"},
     "notice_period": {"label": "Notice period / earliest start date", "type": "text"},
+    "earliest_start_date": {"label": "Earliest start date (YYYY-MM-DD)", "type": "text"},
+    "availability_months": {"label": "How many months you can work (internship length)", "type": "number"},
     "highest_education": {"label": "Highest level of education", "type": "select",
                           "options": ["High School", "Associate's", "Bachelor's", "Master's", "PhD"]},
     "how_did_you_hear": {"label": "How did you hear about us?", "type": "text"},
@@ -143,15 +145,25 @@ def choose_option(answer: str, options: list[str]) -> str:
 
 
 class _Ctx:
-    def __init__(self, resume: ResumeContent, prefs: dict[str, Any], mappings: dict[str, str], job: Job | None) -> None:
+    def __init__(self, resume: ResumeContent, prefs: dict[str, Any], mappings: dict[str, str], job: Job | None,
+                 links: dict[str, str] | None = None) -> None:
         self.resume = resume
         self.prefs = prefs
         self.mappings = mappings
         self.job = job
+        self.links = links or {}  # your profile links (LinkedIn, GitHub, portfolio, LeetCode...): link questions only
         self.question = ""  # the (normalized) question being answered
+        self.from_saved = False  # the answer being built came from one of your saved answers
 
     def m(self, key: str) -> str | None:
         value = self.mappings.get(key)
+        found = value.strip() if isinstance(value, str) and value.strip() else None
+        if found:
+            self.from_saved = True
+        return found
+
+    def link(self, key: str) -> str | None:
+        value = self.links.get(key)
         return value.strip() if isinstance(value, str) and value.strip() else None
 
 
@@ -200,6 +212,21 @@ def _profile(getter: Callable[[ResumeContent], str]) -> Callable[[_Ctx], tuple[s
         value = getter(ctx.resume)
         return (value, 0.95) if value else (None, 0.0)
     return resolver
+
+
+def _link(key: str, from_resume: Callable[[ResumeContent], str] | None = None) -> Callable[[_Ctx], tuple[str | None, float]]:
+    """A profile link: the one in your profile (onboarding / Settings) first, then the one on your resume."""
+    def resolver(ctx: _Ctx) -> tuple[str | None, float]:
+        value = ctx.link(key) or (from_resume(ctx.resume) if from_resume else None)
+        return (value, 0.95) if value else (None, 0.0)
+    return resolver
+
+
+def _start_date(ctx: _Ctx) -> tuple[str | None, float]:
+    """Start-date questions use your earliest start date; notice-period questions your notice period."""
+    if not re.search(r"notice period", ctx.question) and ctx.m("earliest_start_date"):
+        return ctx.m("earliest_start_date"), 0.95
+    return _mapping("notice_period", "2 weeks", 0.5)(ctx)
 
 
 def _current(attr: str) -> Callable[[ResumeContent], str]:
@@ -260,9 +287,11 @@ RULES: list[tuple[re.Pattern[str], Callable[[_Ctx], tuple[str | None, float]]]] 
     (re.compile(r"relocat"), _mapping("willing_to_relocate")),
     (re.compile(r"salary|compensation|pay expectation|expected (?:pay|ctc|stipend)|desired pay|\bstipend\b|\bctc\b"), _salary),
     (re.compile(r"how many years|years of (?:professional |relevant |work )?experience"), _years),
-    (re.compile(r"notice period|start date|when can you start|earliest.*start|available to start"), _mapping("notice_period", "2 weeks", 0.5)),
+    (re.compile(r"how many months|(?:internship|engagement) duration|duration of (?:the )?internship|available for .{0,30}\bmonths?\b"),
+     _mapping("availability_months")),
+    (re.compile(r"notice period|start date|when can you start|earliest.*start|available to start"), _start_date),
     (re.compile(r"how did you (?:hear|find|learn)|where did you (?:hear|find)|referr?al source|source of application"), _mapping("how_did_you_hear", "Job board", 0.6)),
-    (re.compile(r"18 years|over 18|at least 18|legal age"), _mapping("over_18", "Yes", 0.8)),
+    (re.compile(r"18 years|over 18|at least 18|legal age"), _mapping("over_18")),
     (re.compile(r"highest (?:level of )?(?:education|degree|qualification)"), _mapping_or("highest_education", _edu("degree"), 0.8)),
     (re.compile(r"pronoun"), _mapping("pronouns")),
     (re.compile(r"hispanic|latino"), _eeo("hispanic_latino")),
@@ -270,9 +299,15 @@ RULES: list[tuple[re.Pattern[str], Callable[[_Ctx], tuple[str | None, float]]]] 
     (re.compile(r"\brace\b|ethnic"), _eeo("race_ethnicity")),
     (re.compile(r"veteran"), _eeo("veteran_status")),
     (re.compile(r"disabilit"), _eeo("disability_status")),
-    (re.compile(r"linkedin"), _profile(lambda r: r.personal_info.linkedin)),
-    (re.compile(r"github"), _profile(lambda r: r.personal_info.github)),
-    (re.compile(r"portfolio|personal (?:web)?site|website"), lambda c: (c.m("website") or c.resume.personal_info.portfolio or None, 0.9)),
+    (re.compile(r"linkedin"), _link("linkedin", lambda r: r.personal_info.linkedin)),
+    (re.compile(r"github"), _link("github", lambda r: r.personal_info.github)),
+    (re.compile(r"leetcode"), _link("leetcode")),
+    (re.compile(r"codeforces"), _link("codeforces")),
+    (re.compile(r"kaggle"), _link("kaggle")),
+    (re.compile(r"hackerrank"), _link("hackerrank")),
+    (re.compile(r"codechef"), _link("codechef")),
+    (re.compile(r"portfolio|personal (?:web)?site|website"),
+     lambda c: ((v, 0.9) if (v := c.m("website") or c.link("portfolio") or c.resume.personal_info.portfolio or None) else (None, 0.0))),
     (re.compile(r"current (?:or most recent )?(?:company|employer)"), _profile(_current("company"))),
     (re.compile(r"current (?:or most recent )?(?:job )?title|current (?:role|position)"), _profile(_current("title"))),
     (re.compile(r"street address|^address"), _mapping("address")),
@@ -313,6 +348,7 @@ def rule_based_answer(question: dict[str, Any], ctx: _Ctx) -> dict[str, Any] | N
     field_type = question.get("field_type") or ("select" if options else "text")
     direct = _field_mapping_lookup(text, ctx.mappings)
     ctx.question = text
+    ctx.from_saved = False
     if direct:
         answer, confidence = direct, 0.97
     else:
@@ -321,6 +357,8 @@ def rule_based_answer(question: dict[str, Any], ctx: _Ctx) -> dict[str, Any] | N
             if pattern.search(text):
                 answer, confidence = resolver(ctx)
                 break
+    if answer is not None and not direct and not ctx.from_saved and is_eligibility(text):
+        answer = None  # eligibility is never guessed (no defaults, no reading it off the resume): only your saved answer
     if answer is None:
         return None
     if options:
@@ -364,6 +402,11 @@ LEARNABLE: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"notice period|when can you start|earliest.*start|available to start"), "notice_period"),
     (re.compile(r"highest (?:level of )?(?:education|degree)"), "highest_education"),
 ]
+
+
+def is_eligibility(question: str) -> bool:
+    """Visa, work authorization, record checks, age, ID numbers...: facts only you can state."""
+    return bool(FACTUAL.search(normalize_text(question)))
 
 
 def learnable_key(question: str) -> str | None:
@@ -411,15 +454,18 @@ def answer_questions(
     field_mappings: dict[str, str],
     job: Job | None = None,
     use_llm: bool = True,
+    links: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     resume = ResumeContent.model_validate(resume_content)
-    ctx = _Ctx(resume, prefs, field_mappings, job)
+    ctx = _Ctx(resume, prefs, field_mappings, job, links)
     answers: dict[int, dict[str, Any]] = {}
     pending: list[tuple[int, dict[str, Any]]] = []
     for idx, q in enumerate(questions):
         ans = rule_based_answer(q, ctx)
         if ans is not None:
             answers[idx] = ans
+        elif is_eligibility(q.get("question") or ""):
+            answers[idx] = fallback_answer(q, ctx)  # left blank for you: never sent to the LLM to guess
         else:
             pending.append((idx, q))
 
@@ -494,3 +540,16 @@ def answer_questions(
 
 def mappings_dict(field_mappings: list[Any]) -> dict[str, str]:
     return {m.field_name: m.field_value for m in field_mappings}
+
+
+def profile_links(user: Any) -> dict[str, str]:
+    """Your profile links by key (linkedin, github, portfolio, and each extra link's label, e.g. leetcode)."""
+    links: dict[str, str] = {}
+    for key, value in (("linkedin", user.linkedin_url), ("github", user.github_url), ("portfolio", user.portfolio_url)):
+        if value:
+            links[key] = value
+    for item in user.profile_links or []:
+        key = re.sub(r"[^a-z0-9]+", "", str(item.get("label") or "").lower())
+        if key and item.get("url"):
+            links.setdefault(key, str(item["url"]))
+    return links

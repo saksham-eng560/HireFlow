@@ -23,6 +23,7 @@ from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlparse
 
+from app.config import settings
 from app.models.enums import ATSPlatform
 from app.services.company_catalog import TIERS, Company, by_board, match_company, normalize_company, owns_url
 
@@ -114,6 +115,8 @@ def check_company(company_name: str, description: str, *, platform: Any = None, 
     """The rules: instant, no network. ``trusted`` = companies you marked legit."""
     urls = [u for u in (urls or []) if u]
     raw = raw or {}
+    if raw.get("demo") and settings.DEMO_MODE and all(u.startswith(settings.demo_site_url) for u in urls):
+        return CompanyCheck(VERIFIED, 90, ["A fictional company on the bundled demo careers site"], method="demo")
     text = f"{description or ''}\n{raw.get('stipend') or ''}"
     hard = _flags(text, HARD_FLAGS)
     soft = _flags(text, SOFT_FLAGS)
@@ -182,9 +185,12 @@ LLM_SCHEMA: dict[str, Any] = {
 
 
 def _prompt(company: str, role: str, description: str) -> str:
+    from app.services.llm import sanitize_untrusted
+
     return (
         "COMPANY LEGITIMACY CHECK for an internship applicant (protect them from fake companies and scams).\n"
-        f"Company name as posted: {company}\nRole: {role}\nPosting text:\n{description[:2500]}\n\n"
+        f"Company name as posted: {sanitize_untrusted(company, inline=True)}\nRole: {sanitize_untrusted(role, inline=True)}\n"
+        f'Posting text:\n<untrusted_data name="posting">\n{sanitize_untrusted(description[:2500])}\n</untrusted_data>\n\n'
         "Answer only from what you reliably know. recognized = true only if you know this exact company as an "
         "established, real business. official_domain = its website domain (e.g. example.com) or \"\" if you are "
         "not sure. legit = \"no\" if the posting shows scam signs (fees, deposits, WhatsApp-only contact, "

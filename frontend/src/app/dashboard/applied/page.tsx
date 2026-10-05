@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   ArrowUpRight, BellRing, Building2, CalendarDays, CheckCheck, Clock3, ExternalLink, Mail, MapPin, Plus, Search,
 } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
+import { ErrorState } from "@/components/error-state";
 import { AnimatedNumber, EASE_OUT, Stagger, StaggerItem } from "@/components/motion";
 import { Modal } from "@/components/modal";
 import { PageHeader } from "@/components/page-header";
@@ -20,6 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { useApplications, useMe } from "@/hooks/use-applications";
 import { useRefreshTracking } from "@/components/i-applied-button";
+import { useReducedMotionSafe } from "@/hooks/use-reduced-motion";
 import { ApiError, post } from "@/lib/api-client";
 import type { ApplicationDetail, ApplicationStatus, ApplicationSummary } from "@/lib/types";
 import { STATUS_LABELS, cn, formatDate } from "@/lib/utils";
@@ -61,14 +63,14 @@ function daysSince(value: string | null) {
 // ------------------------------------------------------------------ headline tiles
 function StageTile({ label, value, total, index }: { label: string; value: number; total: number; index: number }) {
   const share = total ? Math.round((value / total) * 100) : 0;
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   return (
     <div className="flex flex-col bg-card p-5">
       <div className="flex items-center justify-between text-muted-foreground">
         <span className="text-xs font-medium">{label}</span>
         <span className="font-mono text-[10px]">0{index + 1}</span>
       </div>
-      <p className="mt-4 font-display text-4xl leading-none"><AnimatedNumber value={value} /></p>
+      <p className="mt-4 font-mono font-bold tracking-tight text-4xl leading-none"><AnimatedNumber value={value} /></p>
       <div className="mt-4" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={share} aria-label={`${label}: ${share}% of your applications`}>
         <div className="h-1.5 bg-primary/15">
           <motion.div className="h-full origin-left bg-primary" initial={reduce ? false : { scaleX: 0 }} animate={{ scaleX: share / 100 }}
@@ -82,7 +84,7 @@ function StageTile({ label, value, total, index }: { label: string; value: numbe
 
 /** Motion graphic: a signal pulse travels the tracking line while the agent watches your inbox. */
 function TrackingLine() {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   return (
     <div className="relative hidden h-10 overflow-hidden px-2 md:block" aria-hidden>
       <div className="relative h-full">
@@ -103,7 +105,7 @@ function TrackingLine() {
 
 // ------------------------------------------------------------------ one tracked application
 function ProgressRail({ status }: { status: ApplicationStatus }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionSafe();
   const closed = CLOSED.includes(status);
   const reached = stageIndex(status);
   return (
@@ -142,7 +144,7 @@ function TrackedCard({ app, onChanged }: { app: ApplicationSummary; onChanged: (
   };
 
   return (
-    <article className="group border bg-card p-5 transition-[border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-foreground/60 motion-reduce:hover:translate-y-0">
+    <article className="rounded-xl group border bg-card p-5 transition-[border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-foreground/60 motion-reduce:hover:translate-y-0">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <Link href={`/dashboard/applications/${app.id}`} className="font-semibold hover:text-primary">{job?.role_title}</Link>
@@ -247,7 +249,7 @@ export default function AppliedPage() {
   const [logOpen, setLogOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const statuses = FILTERS.find((f) => f.key === filter)?.statuses;
-  const { data, isLoading, mutate } = useApplications({ applied_by: "me", status: statuses, q, page, page_size: 20, sort: "updated" });
+  const { data, isLoading, error, mutate } = useApplications({ applied_by: "me", status: statuses, q, page, page_size: 20, sort: "updated" });
   const counts = data?.counts || {};
   const sum = (list: ApplicationStatus[]) => list.reduce((n, s) => n + (counts[s] || 0), 0);
   const total = data?.self_applied_total ?? 0;
@@ -305,7 +307,8 @@ export default function AppliedPage() {
 
       <div className="space-y-3">
         {isLoading && Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-[150px]" />)}
-        {!isLoading && !data?.items.length && (
+        {error && !data && <ErrorState error={error} onRetry={() => mutate()} title="Couldn't load what you applied to" />}
+        {data && !data.items.length && (
           <EmptyState icon={CheckCheck} title={total ? "Nothing matches" : "Nothing here yet"}
             description={total ? "Try another filter." : "Applied to a job yourself? Click “I Applied” on it in Swipe Review, Jobs or Applications — or log it here — and the agent tracks it from then on."}
             action={!total && (

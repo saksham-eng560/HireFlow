@@ -3,81 +3,93 @@
 @tailwind utilities;
 
 /*
- * HireFlow design tokens — "ink" (dark, default) and "paper" (light).
- * Charcoal surfaces, warm cream type, one signal red, hairline grid lines, square corners.
+ * HireFlow design tokens: blue and white only (docs/HIREFLOW_PLAN.md §3).
+ * Light: white surfaces, deep navy text, one blue accent. Dark: deep navy with white text.
+ * Status colours are shades of blue and are always paired with an icon and a text label.
+ * The one exception is --danger, a single muted red used only for destructive actions (Delete account).
  */
 @layer base {
   :root {
-    --background: 30 22% 94%;
-    --foreground: 0 6% 11%;
-    --card: 30 30% 97%;
-    --card-foreground: 0 6% 11%;
-    --popover: 30 30% 97%;
-    --popover-foreground: 0 6% 11%;
-    --primary: 356 75% 48%;
-    --primary-foreground: 0 100% 99%;
-    --secondary: 30 14% 88%;
-    --secondary-foreground: 0 6% 14%;
-    --muted: 30 14% 89%;
-    --muted-foreground: 0 4% 36%;
-    --accent: 30 16% 88%;
-    --accent-foreground: 0 6% 11%;
-    --destructive: 356 75% 46%;
-    --destructive-foreground: 0 0% 100%;
-    --success: 152 52% 30%;
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 214 100% 97%;
+    --secondary-foreground: 222 47% 20%;
+    --muted: 214 60% 97%;
+    --muted-foreground: 215 25% 40%;
+    --accent: 214 95% 93%;
+    --accent-foreground: 224 64% 33%;
+    --border: 214 32% 89%;
+    --line: 214 32% 80%;
+    --input: 214 32% 85%;
+    --ring: 221 83% 53%;
+    --radius: 0.75rem;
+    /* Status: shades of blue, always with an icon and a label */
+    --success: 224 76% 40%;
     --success-foreground: 0 0% 100%;
-    --warning: 30 90% 34%;
-    --warning-foreground: 0 0% 100%;
-    --info: 205 60% 38%;
+    --info: 200 89% 33%; /* plan value 199 89% 40% is 3.99:1 on white; darkened to pass WCAG AA */
     --info-foreground: 0 0% 100%;
-    --border: 20 8% 78%;
-    --line: 0 5% 62%;
-    --input: 20 8% 70%;
-    --ring: 356 75% 48%;
-    --radius: 0rem;
-    --noise-opacity: 0.05;
-    /* Chart tokens */
-    --series-1: #2b2727;
-    --series-2: #d52b37;
-    --series-3: #3f8f74;
-    --chart-grid: #ddd5cc;
-    --chart-axis: #c3b9ae;
-    --chart-muted: #6f6767;
+    --warning: 217 33% 35%;
+    --warning-foreground: 0 0% 100%;
+    --destructive: 222 47% 20%;
+    --destructive-foreground: 0 0% 100%;
+    /* Destructive actions only (Delete account) */
+    --danger: 0 62% 42%;
+    --danger-foreground: 0 0% 100%;
+    /* Brand mark colours: the same in light and dark mode */
+    --brand: 221 83% 53%;
+    --brand-foreground: 0 0% 100%;
+    --brand-soft: 213 97% 87%;
+    /* Scrim behind dialogs and sheets (both modes) */
+    --overlay: 222 47% 5%;
+    /* Charts */
+    --series-1: #1e3a8a;
+    --series-2: #2563eb;
+    --series-3: #60a5fa;
+    --chart-grid: #e2e8f0;
+    --chart-axis: #cbd5e1;
+    --chart-muted: #64748b;
   }
   .dark {
-    --background: 0 4% 11%;
-    --foreground: 0 22% 94%;
-    --card: 0 4% 12.5%;
-    --card-foreground: 0 22% 94%;
-    --popover: 0 4% 13%;
-    --popover-foreground: 0 22% 94%;
-    --primary: 356 75% 53%;
-    --primary-foreground: 0 100% 99%;
-    --secondary: 0 4% 17%;
-    --secondary-foreground: 0 18% 92%;
-    --muted: 0 4% 16%;
-    --muted-foreground: 0 6% 64%;
-    --accent: 0 4% 17%;
-    --accent-foreground: 0 22% 94%;
-    --destructive: 356 75% 53%;
-    --destructive-foreground: 0 0% 100%;
-    --success: 152 45% 52%;
-    --success-foreground: 0 5% 10%;
-    --warning: 38 92% 60%;
-    --warning-foreground: 0 5% 10%;
-    --info: 205 70% 66%;
-    --info-foreground: 0 5% 10%;
-    --border: 0 3% 26%;
-    --line: 0 5% 44%;
-    --input: 0 3% 32%;
-    --ring: 356 75% 53%;
-    --noise-opacity: 0.07;
-    --series-1: #efe6e1;
-    --series-2: #ee4450;
-    --series-3: #7fb8a4;
-    --chart-grid: #2e2a2a;
-    --chart-axis: #3d3838;
-    --chart-muted: #9d9595;
+    --background: 222 47% 7%;
+    --foreground: 0 0% 100%;
+    --card: 222 44% 10%;
+    --card-foreground: 0 0% 100%;
+    --popover: 222 44% 11%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 213 94% 68%;
+    --primary-foreground: 222 47% 11%;
+    --secondary: 222 40% 16%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 222 40% 14%;
+    --muted-foreground: 214 32% 75%;
+    --accent: 222 40% 18%;
+    --accent-foreground: 0 0% 100%;
+    --border: 222 30% 22%;
+    --line: 222 30% 34%;
+    --input: 222 30% 26%;
+    --ring: 213 94% 68%;
+    --success: 213 94% 78%;
+    --success-foreground: 222 47% 11%;
+    --info: 199 89% 70%;
+    --info-foreground: 222 47% 11%;
+    --warning: 214 32% 80%;
+    --warning-foreground: 222 47% 11%;
+    --destructive: 214 32% 91%;
+    --destructive-foreground: 222 47% 11%;
+    --danger: 0 70% 70%;
+    --danger-foreground: 222 47% 11%;
+    --series-1: #bfdbfe;
+    --series-2: #60a5fa;
+    --series-3: #2563eb;
+    --chart-grid: #1e293b;
+    --chart-axis: #334155;
+    --chart-muted: #94a3b8;
   }
   * {
     @apply border-border;
@@ -87,7 +99,7 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
-    font-feature-settings: "ss01", "ss02";
+    font-feature-settings: "cv11", "ss01";
   }
   ::selection {
     @apply bg-primary text-primary-foreground;
@@ -95,27 +107,13 @@
 }
 
 @layer components {
-  /* Film-grain overlay like printed matter; sits under content, never catches clicks. */
-  .noise::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    z-index: 0;
-    pointer-events: none;
-    opacity: var(--noise-opacity);
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1.2 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
-  }
-  .noise > * {
-    position: relative;
-    z-index: 1;
-  }
   .label-caps {
     @apply text-[11px] font-medium uppercase tracking-label;
   }
   .display {
-    @apply font-display uppercase leading-[0.95];
+    @apply font-display font-extrabold leading-[1.05] tracking-tight;
   }
-  /* Red brush strokes behind a headline (see the landing hero). */
+  /* Brush strokes behind a headline (see the landing hero). */
   .brush {
     position: relative;
     isolation: isolate;
@@ -154,9 +152,9 @@
   }
   .grid-lines {
     /* 1px separators between grid cells: give the grid a line-colored background and gap-px */
-    @apply gap-px bg-border;
+    @apply gap-px overflow-hidden rounded-xl bg-border;
   }
   .grid-lines > * {
-    @apply bg-background;
+    @apply bg-card;
   }
 }

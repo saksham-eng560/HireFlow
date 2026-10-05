@@ -60,6 +60,9 @@ class Application(Base):
     # Submission tracking
     form_screenshot_url: Mapped[str | None] = mapped_column(Text)
     staged_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    # APPROVED but held until then: the undo window of an automatic submit ("Sending soon"), or the
+    # daily / per-company limit was reached. A sweep sends it once it's due.
+    send_after: Mapped[datetime | None] = mapped_column(UTCDateTime, index=True)
     approved_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     submitted_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     confirmation_screenshot_url: Mapped[str | None] = mapped_column(Text)
