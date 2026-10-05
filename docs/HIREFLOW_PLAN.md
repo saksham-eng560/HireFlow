@@ -324,7 +324,7 @@ smoke test → link it from the README and landing page.
 
 | Number | Measured |
 |---|---|
-| Tests | 439 backend (pytest) + 15 end-to-end (Playwright, through the real dashboard); 80% backend coverage |
+| Tests | 443 backend (pytest) + 15 end-to-end (Playwright, through the real dashboard); 80% backend coverage |
 | Time from sign-up to the first swipe deck | 0.9 s of server time; about 5 s through the UI (e2e) |
 | Jobs per scan and scan time (demo careers site) | 12 postings found and all 12 in the deck, in 0.3 s |
 | Form-fill success (demo careers site, Chromium, dry run) | 12 of 12 forms, 100% of fields, every required field |

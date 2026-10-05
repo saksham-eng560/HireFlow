@@ -7,24 +7,26 @@ real employer, real sign-ins are off, and everything resets every night. To run 
 
 There are two ways to host it:
 
-- **[Free](#free-deployment-vercel--hugging-face)**: the dashboard on Vercel and the API on a Hugging Face Space,
-  $0 a month, set up in about ten minutes. This is the one running at https://hireflow-three-woad.vercel.app.
+- **[Free](#free-deployment-vercel--render)**: the dashboard on Vercel and the API on Render's free plan, $0 a
+  month and no card, set up in about five minutes. This is the one running at https://hireflow-three-woad.vercel.app.
 - **[Always on](#always-on-deployment-render-neon-upstash-r2)**: Render, Neon, Upstash and Cloudflare R2, on paid
   instances (see [costs](#costs-and-limits)), with no cold starts and a database that survives restarts.
 
-## Free deployment: Vercel + Hugging Face
+## Free deployment: Vercel + Render
 
 | Part | Service (free plan) | What you get |
 |---|---|---|
 | Dashboard | Vercel Hobby | Global CDN, a deploy on every push to `main` |
-| API, scheduler and Chromium | Hugging Face Space (Docker, CPU basic) | 2 vCPUs, 16 GB RAM: plenty for the form-filling browser |
-| Database, queue, files | Inside the Space | SQLite, in-process tasks, local disk; no Redis needed |
+| API, scheduler and Chromium | Render free web service (Docker) | 512 MB of memory, a tenth of a CPU; sleeps when idle |
+| Database, queue, files | Inside the container | SQLite, in-process tasks, local disk; no Redis needed |
 
-The Space runs one container ([`deploy/huggingface/Dockerfile`](../deploy/huggingface/Dockerfile), the
-`all-in-one` role of [`backend/docker-entrypoint.sh`](../backend/docker-entrypoint.sh)): the API in demo mode,
-its tasks in background threads and the scheduler next to it, as `./start.sh` does without Redis. It makes its
-own `SECRET_KEY` and `ENCRYPTION_KEY` on first start-up. Its disk is wiped whenever the Space restarts, which
-suits a demo that resets every night anyway: the demo account is re-created at start-up.
+The API runs as one container, one process ([`deploy/Dockerfile`](../deploy/Dockerfile), the `all-in-one` role
+of [`backend/docker-entrypoint.sh`](../backend/docker-entrypoint.sh)): the API in demo mode, with its tasks and
+the scheduler in background threads (`RUN_SCHEDULER_IN_API`). That's what fits the free 512 MB: measured at about
+350 MB at its peak while Chromium fills a form, and CI runs the image under a 512 MB limit on every push. It makes
+its own `SECRET_KEY` and `ENCRYPTION_KEY` if none are set, and finds its own URL from Render (`RENDER_EXTERNAL_URL`).
+Its disk is wiped whenever it restarts, which suits a demo that resets every night anyway: the demo account is
+re-created at start-up.
 
 ### 1. The dashboard on Vercel
 
@@ -32,23 +34,18 @@ suits a demo that resets every night anyway: the demo account is re-created at s
    and deploy. (The framework, install and build commands come from
    [`frontend/vercel.json`](../frontend/vercel.json).)
 2. Note the production URL (**Settings → Domains**), e.g. `https://hireflow-three-woad.vercel.app`, and add the
-   environment variable `NEXT_PUBLIC_SITE_URL` with it.
+   environment variables `NEXT_PUBLIC_SITE_URL` (that URL) and `NEXT_PUBLIC_DEMO_MODE` (`true`).
 
-### 2. The API on Hugging Face
+### 2. The API on Render
 
-1. Create a free account at https://huggingface.co/join.
-2. **Settings → Access Tokens → Create new token**, type **Write**, name it `hireflow-deploy`. Copy it.
-3. In this repository on GitHub: **Settings → Secrets and variables → Actions → New repository secret**, name
-   `HF_TOKEN`, paste the token. (If your dashboard's URL isn't the one in
-   [`deploy-space.yml`](../.github/workflows/deploy-space.yml), also add a *variable* `FRONTEND_URL` with it.)
-4. **Actions → Deploy API (Hugging Face Space) → Run workflow.** It creates the Space `<your-user>/hireflow`,
-   points it at the dashboard, uploads the API and waits until it answers (the first build takes about 10
-   minutes; later ones a few). From then on it redeploys after every green CI run on `main`. The log ends with
-   the API's URL: `https://<your-user>-hireflow.hf.space`.
-
-[`scripts/deploy_space.py`](../scripts/deploy_space.py) does the work and can also run from your computer:
-`HF_TOKEN=... python scripts/deploy_space.py --frontend-url https://<dashboard>` (`--dry-run` lists what it
-uploads: the app, prompts and scripts; never tests, local databases or `.env`).
+1. If your dashboard's URL isn't `https://hireflow-three-woad.vercel.app`, change `FRONTEND_URL` and
+   `CORS_ORIGINS` in [`render.yaml`](../render.yaml) first.
+2. Open **https://render.com/deploy?repo=https://github.com/saksham-eng560/HireFlow** (for a fork, use its URL),
+   sign in with GitHub (no card needed) and press **Deploy Blueprint**. Render reads [`render.yaml`](../render.yaml)
+   and creates `hireflow-api` on the free plan.
+3. The first build takes about 10 minutes. Then the service's page shows its URL, e.g.
+   `https://hireflow-api.onrender.com` (Render adds a suffix if the name is taken); `/health/ready` there must
+   answer `"database": "ok"`. Every push to `main` redeploys it.
 
 ### 3. Connect them
 
@@ -57,33 +54,45 @@ time):
 
 | Variable | Value |
 |---|---|
-| `BACKEND_URL` | `https://<your-user>-hireflow.hf.space` |
-| `NEXT_PUBLIC_WS_URL` | `wss://<your-user>-hireflow.hf.space/api/v1/ws` (live updates; without it the dashboard polls) |
-| `NEXT_PUBLIC_DEMO_MODE` | `true` ("Try the demo" shows straight away, even while the Space wakes up) |
+| `BACKEND_URL` | the Render URL, e.g. `https://hireflow-api.onrender.com` |
+| `NEXT_PUBLIC_WS_URL` | `wss://<render host>/api/v1/ws` (live updates; without it the dashboard polls) |
 
 Open the dashboard and press **Try the demo**. To check everything at once:
-`python3 scripts/smoke_test.py --site https://<dashboard> --api https://<your-user>-hireflow.hf.space --demo`.
+`python3 scripts/smoke_test.py --site https://<dashboard> --api https://<render host> --demo --timeout 120`.
 
 ### Good to know
 
-- **Sleeping.** A free Space sleeps after 48 hours without visitors and takes a minute or two to wake. The daily
-  smoke test ([`smoke.yml`](../.github/workflows/smoke.yml)) visits it every morning, which keeps it awake.
+- **Sleeping.** The free plan sleeps after 15 minutes without visitors. The next visitor wakes it, which takes
+  about a minute: meanwhile the dashboard says "Can't reach the HireFlow server right now… try again in a
+  minute", and "Try the demo" works once it's up.
+- **Slow form filling.** A tenth of a CPU is enough for the dashboard and the deck, but filling a form in
+  Chromium takes a minute or two instead of seconds.
 - **Restarts reset the data.** Accounts made by visitors last until the next restart or nightly reset. For a
-  database that survives, set `DATABASE_URL` to a free Neon database as a Space *secret* (Space **Settings →
-  Variables and secrets**), together with fixed `SECRET_KEY` and `ENCRYPTION_KEY` secrets.
-- **AI.** Without a key the demo runs on built-in heuristics. To use Claude, add `ANTHROPIC_API_KEY` as a Space
-  secret (each visitor's daily AI calls are capped by `DEMO_LLM_CALLS_PER_USER_PER_DAY`); for Ollama Cloud see
-  [OLLAMA.md](OLLAMA.md#the-deployed-demo).
-- **Logs.** The Space's page → **Logs**; the dashboard's in Vercel → **Logs**.
-- **Never edit the Space by hand**: the next deploy replaces its files.
+  database that survives, set `DATABASE_URL` to a free Neon database (Render: the service → **Environment**),
+  together with fixed `SECRET_KEY` and `ENCRYPTION_KEY`.
+- **AI.** Without a key the demo runs on built-in heuristics; no AI model fits in 512 MB. To use Claude, add
+  `ANTHROPIC_API_KEY` in **Environment** (each visitor's daily AI calls are capped by
+  `DEMO_LLM_CALLS_PER_USER_PER_DAY`); for a free AI model see [Ollama Cloud](OLLAMA.md#the-deployed-demo).
+- **Logs.** Render: the service → **Logs**; the dashboard's in Vercel → **Logs**.
+
+### On a Hugging Face Space
+
+The same container runs on a Hugging Face Space (2 vCPUs, 16 GB of memory, sleeps only after 48 hours without
+visitors), but Hugging Face hosts Docker Spaces only with a PRO subscription. With one: save a **Write** token as
+the repository secret `HF_TOKEN`, then **Actions → Deploy API (Hugging Face Space) → Run workflow**. It creates
+the Space `<your-user>/hireflow`, points it at the dashboard, uploads the API, waits until it answers and runs the
+smoke test; its URL is `https://<your-user>-hireflow.hf.space`, for `BACKEND_URL` as above.
+[`scripts/deploy_space.py`](../scripts/deploy_space.py) does the work and can also run from your computer:
+`HF_TOKEN=... python scripts/deploy_space.py --frontend-url https://<dashboard>` (`--dry-run` lists what it
+uploads: the app, prompts and scripts; never tests, local databases or `.env`).
 
 ## Always-on deployment: Render, Neon, Upstash, R2
 
 | Part | Service | Config in this repo |
 |---|---|---|
 | Dashboard | Vercel (root directory `frontend/`) | [`frontend/vercel.json`](../frontend/vercel.json) |
-| API | Render web service (Docker) | [`render.yaml`](../render.yaml) |
-| Celery worker + scheduler | Render background worker (one instance, `worker-beat`) | [`render.yaml`](../render.yaml) |
+| API | Render web service (Docker) | [`deploy/render-always-on.yaml`](../deploy/render-always-on.yaml) |
+| Celery worker + scheduler | Render background worker (one instance, `worker-beat`) | [`deploy/render-always-on.yaml`](../deploy/render-always-on.yaml) |
 | PostgreSQL + pgvector | Neon | the first migration enables `vector` and `pg_trgm` |
 | Redis | Upstash (TLS) | `rediss://` URLs work as copied |
 | Files (resumes, form screenshots) | Cloudflare R2 (`STORAGE_BACKEND=s3`) | |
@@ -123,7 +132,8 @@ downloaded.
 
 ### 5. API and worker: Render
 
-1. **New → Blueprint**, pick this repository. Render reads [`render.yaml`](../render.yaml) and creates
+1. **New → Blueprint**, pick this repository and set **Blueprint path** to `deploy/render-always-on.yaml`.
+   Render reads [it](../deploy/render-always-on.yaml) and creates
    `hireflow-api` (web, `starter`) and `hireflow-worker` (background worker, `standard`: Chromium needs 1–2 GB).
    `SECRET_KEY` and `ENCRYPTION_KEY` are generated once and shared by both.
 2. Fill in the values it asks for, on both services (table below). For the first deploy, set `PUBLIC_API_URL` to
@@ -228,7 +238,7 @@ Everything else (Google, SMTP, proxies, CAPTCHA solvers) stays unset: the demo t
 
 Free tiers cover the dashboard (Vercel Hobby), the database (Neon), files (R2) and errors (Sentry). Render's free
 web services sleep when idle and it has no free background workers, so an always-on demo needs the paid API and
-worker instances in `render.yaml`. Redis needs a plan that allows a continuously polling worker (see step 2).
+worker instances in `deploy/render-always-on.yaml`. Redis needs a plan that allows a continuously polling worker (see step 2).
 Each visitor's AI use is capped per day, and without an AI key there's no model cost at all.
 
 ## Troubleshooting

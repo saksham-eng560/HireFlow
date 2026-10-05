@@ -1,7 +1,6 @@
 # Smoke-tests the public demo (docs/DEPLOY.md): every day, after each dashboard deploy, and on demand.
 # It checks https://hireflow-three-woad.vercel.app unless the repository variable DEMO_SITE_URL says otherwise
-# (DEMO_API_URL, optional: the API's own URL). The daily visit also keeps a free Hugging Face Space awake
-# (they sleep after 48 hours without visitors).
+# (DEMO_API_URL, optional: the API's own URL). Free hosts sleep when idle, so the first request may wake one.
 name: Smoke test (public demo)
 
 on:

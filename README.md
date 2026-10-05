@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/saksham-eng560/HireFlow/actions/workflows/ci.yml"><img src="https://github.com/saksham-eng560/HireFlow/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <a href="docs/TESTING.md"><img src="https://img.shields.io/badge/tests-439%20backend%20%2B%2015%20e2e-2563EB" alt="Tests" /></a>
+  <a href="docs/TESTING.md"><img src="https://img.shields.io/badge/tests-443%20backend%20%2B%2015%20e2e-2563EB" alt="Tests" /></a>
   <a href="docs/TESTING.md"><img src="https://img.shields.io/badge/coverage-80%25-2563EB" alt="Coverage" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2563EB" alt="MIT license" /></a>
   <a href="https://hireflow-three-woad.vercel.app"><img src="https://img.shields.io/badge/live%20demo-hireflow--three--woad.vercel.app-2563EB" alt="Live demo" /></a>
@@ -174,7 +174,7 @@ make lint        # ruff, ESLint, TypeScript, colour contrast
 make metrics     # measure the numbers below
 ```
 
-Measured with `scripts/metrics.py`, not guessed: **439 backend tests (80% coverage) and 15 end-to-end tests**; on the demo
+Measured with `scripts/metrics.py`, not guessed: **443 backend tests (80% coverage) and 15 end-to-end tests**; on the demo
 careers site the first scan takes about 0.3 s, sign-up to the first Swipe Review deck takes under a second of
 server time (about 5 s through the UI), and 12 of 12 forms are filled in Chromium with every required field.
 CI runs all of it plus migrations, security audits and Docker builds: [docs/TESTING.md](docs/TESTING.md).
@@ -182,12 +182,11 @@ CI runs all of it plus migrations, security audits and Docker builds: [docs/TEST
 ## Deployment
 
 - **Free public demo** (what runs at [hireflow-three-woad.vercel.app](https://hireflow-three-woad.vercel.app)): the
-  dashboard on Vercel and the API, scheduler and Chromium in one free Hugging Face Space, deployed by
-  [`deploy-space.yml`](.github/workflows/deploy-space.yml) after every green CI run:
-  [docs/DEPLOY.md](docs/DEPLOY.md#free-deployment-vercel--hugging-face).
+  dashboard on Vercel, and the API, scheduler and Chromium in one 512 MB container on Render's free plan, deployed
+  in one click from [`render.yaml`](render.yaml): [docs/DEPLOY.md](docs/DEPLOY.md#free-deployment-vercel--render).
 - **Always-on demo** (Vercel + Render + Neon + Upstash + Cloudflare R2 + Sentry): [docs/DEPLOY.md](docs/DEPLOY.md#always-on-deployment-render-neon-upstash-r2),
-  with [`render.yaml`](render.yaml). Both are checked daily by a smoke test (`scripts/smoke_test.py`) that visits
-  the deployment like a visitor would.
+  with [`deploy/render-always-on.yaml`](deploy/render-always-on.yaml). Both are checked daily by a smoke test
+  (`scripts/smoke_test.py`) that visits the deployment like a visitor would.
 - **Your own server** (Docker Compose with automatic HTTPS, Oracle Cloud Always Free, AWS):
   [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md#deployment).
 

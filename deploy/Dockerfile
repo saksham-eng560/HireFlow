@@ -1,6 +1,8 @@
-# HireFlow's public demo API as one free Hugging Face Space (Docker): API + scheduler + Chromium, no Redis.
-# scripts/deploy_space.py copies this file to the Space's root next to backend/, prompts/ and scripts/;
-# see docs/DEPLOY.md ("Free deployment"). Same base as backend/Dockerfile.
+# HireFlow's public demo API in one container: the API, its scheduler and Chromium in one process, no Redis
+# (the all-in-one role). It fits a 512 MB instance. Build from the repository root:
+#   docker build -f deploy/Dockerfile -t hireflow-demo .
+# Used by Render's free plan (render.yaml, which sets PORT) and by a Hugging Face Space (scripts/deploy_space.py
+# copies it to the Space's root). See docs/DEPLOY.md, "Free deployment". Same base as backend/Dockerfile.
 ARG PLAYWRIGHT_VERSION=1.56.0
 FROM mcr.microsoft.com/playwright/python:v${PLAYWRIGHT_VERSION}-noble
 
@@ -30,7 +32,7 @@ COPY backend/ /app/
 COPY prompts/ /app/prompts/
 COPY scripts/ /app/scripts/
 
-# Spaces run the container as user 1000, and its disk is wiped on every restart (the demo resets anyway)
+# Runs as user 1000 (what Hugging Face Spaces require); the disk is wiped on every restart (the demo resets anyway)
 RUN mkdir -p /data/storage /data/home \
     && chmod +x /app/docker-entrypoint.sh \
     && chown -R 1000:1000 /app /data

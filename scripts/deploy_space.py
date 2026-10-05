@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Deploy the demo API to a free Hugging Face Space (docs/DEPLOY.md, "Free deployment").
+"""Deploy the demo API to a Hugging Face Space (docs/DEPLOY.md, "On a Hugging Face Space").
+
+Hugging Face runs Docker Spaces only with a PRO subscription; the free route is Render (render.yaml).
 
     HF_TOKEN=... python scripts/deploy_space.py --frontend-url https://<dashboard>.vercel.app [--space you/hireflow]
 
 Creates the Space (Docker) if needed, points it at the dashboard, uploads backend/, prompts/, scripts/ and
-deploy/huggingface/ (its Dockerfile and card), then waits until it's running and its /health/ready answers.
+deploy/Dockerfile and the Space's card, then waits until it's running and its /health/ready answers.
 `.github/workflows/deploy-space.yml` runs this after CI passes on main. Needs `huggingface_hub`.
 """
 
@@ -24,7 +26,8 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
-SPACE_FILES = Path("deploy/huggingface")
+SPACE_FILES = Path("deploy/huggingface")  # the Space card (README.md)
+DOCKERFILE = Path("deploy/Dockerfile")
 SOURCES = ("backend", "prompts", "scripts")
 # Never uploaded: local state, caches, tests and anything that could hold a secret
 IGNORE = shutil.ignore_patterns(
@@ -46,6 +49,7 @@ def build_bundle(dest: Path) -> list[str]:
         shutil.copytree(ROOT / name, dest / name, ignore=IGNORE)
     for item in (ROOT / SPACE_FILES).iterdir():
         shutil.copy2(item, dest / item.name)
+    shutil.copy2(ROOT / DOCKERFILE, dest / "Dockerfile")
     return sorted(str(p.relative_to(dest)) for p in dest.rglob("*") if p.is_file())
 
 
@@ -106,6 +110,7 @@ def main() -> int:
     if not args.frontend_url:
         parser.error("--frontend-url is required to deploy")
     from huggingface_hub import HfApi
+    from huggingface_hub.errors import HfHubHTTPError
 
     token = os.environ.get("HF_TOKEN", "")
     if not token:
@@ -116,7 +121,14 @@ def main() -> int:
     url = space_host(space_id)
     print(f"Space {space_id} -> {url}")
 
-    api.create_repo(space_id, repo_type="space", space_sdk="docker", exist_ok=True)
+    try:
+        api.create_repo(space_id, repo_type="space", space_sdk="docker", exist_ok=True)
+    except HfHubHTTPError as err:
+        if err.response is not None and err.response.status_code == 402:
+            print("Hugging Face runs Docker Spaces only with a PRO subscription (https://huggingface.co/pro).\n"
+                  "The free route is Render: docs/DEPLOY.md, \"Free deployment\".", file=sys.stderr)
+            return 3
+        raise
     for key, value in space_variables(args.frontend_url, url).items():
         api.add_space_variable(space_id, key, value)
     with tempfile.TemporaryDirectory() as tmp:

@@ -92,6 +92,9 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str | None = None  # defaults to REDIS_URL
     CELERY_RESULT_BACKEND: str | None = None
     CELERY_TASK_ALWAYS_EAGER: bool = False  # run tasks inline (no worker needed)
+    # Without Redis: run the periodic jobs (scans, sends, the demo's nightly reset) in the API process itself,
+    # instead of scripts/local_scheduler.py next to it. One process: what fits a 512 MB free instance.
+    RUN_SCHEDULER_IN_API: bool = False
 
     # ---- LLM ----
     ANTHROPIC_API_KEY: str | None = None

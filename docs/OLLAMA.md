@@ -129,10 +129,10 @@ You can also use cloud models through a local Ollama: run `ollama signin`, then 
 
 ## The deployed demo
 
-The [free deployment](DEPLOY.md#free-deployment-vercel--hugging-face)'s API runs on a Hugging Face Space with
-no GPU, so a local model there would take minutes per answer. Use Ollama Cloud instead: on the Space's page,
-**Settings → Variables and secrets**, add the variables `LLM_PROVIDER=ollama`, `OLLAMA_BASE_URL=https://ollama.com`,
-`OLLAMA_MODEL=gpt-oss:120b` and the **secret** `OLLAMA_API_KEY`. The Space restarts with them. Each visitor's
+The [free deployment](DEPLOY.md#free-deployment-vercel--render)'s API runs on Render's free plan: 512 MB and no
+GPU, far too small for a local model. Use Ollama Cloud instead: in Render, open the service → **Environment** and
+add `LLM_PROVIDER=ollama`, `OLLAMA_BASE_URL=https://ollama.com`, `OLLAMA_MODEL=gpt-oss:120b` and `OLLAMA_API_KEY`
+(your key; Render keeps it secret). The service restarts with them. Each visitor's
 AI use is capped per day (`DEMO_LLM_CALLS_PER_USER_PER_DAY`, 40 by default), and the demo refuses **Download
 model**: the model is chosen by whoever deploys it.
 
@@ -192,7 +192,7 @@ Restart HireFlow after editing `.env`.
 
 ## All settings
 
-Set in `.env` (or the Space's variables for the deployed demo). Only `OLLAMA_MODEL` (or `LLM_PROVIDER=ollama`) is
+Set in `.env` (or the host's environment settings for the deployed demo). Only `OLLAMA_MODEL` (or `LLM_PROVIDER=ollama`) is
 needed; the rest have sensible defaults.
 
 | Setting | Default | What it does |

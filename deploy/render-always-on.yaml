@@ -1,0 +1,109 @@
+# Render Blueprint for an always-on public demo on paid instances (docs/DEPLOY.md, "Always-on deployment"): the
+# API, and one worker that also runs the scheduler. The free one-container setup is the root render.yaml.
+# PostgreSQL (Neon), Redis (Upstash), file storage (Cloudflare R2) and Sentry are outside Render. Their URLs and
+# keys are typed into the Render dashboard when the Blueprint is created (sync: false): nothing secret is in git.
+#
+# Dashboard: New > Blueprint > this repository > Blueprint path "deploy/render-always-on.yaml". Keep every
+# service, and Neon and Upstash, in one region.
+
+envVarGroups:
+  - name: hireflow-demo
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DEMO_MODE
+        value: "true"
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: STORAGE_BACKEND
+        value: s3
+      - key: S3_REGION
+        value: auto
+      - key: LOG_LEVEL
+        value: INFO
+      # Generated once by Render and shared by both services (any long random string works for both)
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        generateValue: true
+
+services:
+  - type: web
+    name: hireflow-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    dockerCommand: /app/docker-entrypoint.sh api   # applies migrations, then serves on $PORT
+    preDeployCommand: python scripts/migrate.py      # on paid plans; the API also migrates on start
+    healthCheckPath: /health
+    plan: starter
+    region: singapore
+    autoDeployTrigger: checksPass                    # deploy main only after CI is green
+    envVars:
+      - fromGroup: hireflow-demo
+      - key: API_WORKERS
+        value: "1"
+      - key: DB_POOL_SIZE
+        value: "5"
+      - key: DATABASE_URL          # Neon: the direct (non-pooled) connection string, ?sslmode=require
+        sync: false
+      - key: REDIS_URL             # Upstash: rediss://default:<password>@<host>:6379
+        sync: false
+      - key: PUBLIC_API_URL        # this service's URL, e.g. https://hireflow-api.onrender.com
+        sync: false
+      - key: FRONTEND_URL          # the Vercel URL, e.g. https://hireflow-demo.vercel.app
+        sync: false
+      - key: CORS_ORIGINS          # the same Vercel URL (comma-separate any custom domain too)
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ENDPOINT_URL       # https://<account id>.r2.cloudflarestorage.com
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: SENTRY_DSN            # optional
+        sync: false
+      - key: ANTHROPIC_API_KEY     # optional: without an AI key the demo runs on built-in heuristics
+        sync: false
+      - key: DEMO_ANTHROPIC_MODEL  # optional: a cheaper model for the demo
+        sync: false
+
+  - type: worker
+    name: hireflow-worker
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    dockerCommand: /app/docker-entrypoint.sh worker-beat   # Celery worker + beat (scans, sends, nightly reset)
+    plan: standard                                          # Chromium needs 1-2 GB of memory
+    region: singapore
+    autoDeployTrigger: checksPass
+    envVars:
+      - fromGroup: hireflow-demo
+      - key: WORKER_CONCURRENCY
+        value: "1"
+      - key: DB_POOL_SIZE
+        value: "3"
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: PUBLIC_API_URL        # the API's URL: the worker's browser fills the demo careers site there
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ENDPOINT_URL
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: DEMO_ANTHROPIC_MODEL
+        sync: false

@@ -1,107 +1,36 @@
-# Render Blueprint for the public demo (docs/DEPLOY.md): the API, and one worker that also runs the scheduler.
-# PostgreSQL (Neon), Redis (Upstash), file storage (Cloudflare R2) and Sentry are outside Render. Their URLs and
-# keys are typed into the Render dashboard when the Blueprint is created (sync: false): nothing secret is in git.
+# Render Blueprint: HireFlow's public demo API on Render's free plan (docs/DEPLOY.md, "Free deployment").
+# One click: https://render.com/deploy?repo=https://github.com/saksham-eng560/HireFlow
 #
-# Dashboard: New > Blueprint > this repository. Keep every service, and Neon and Upstash, in one region.
-
-envVarGroups:
-  - name: hireflow-demo
-    envVars:
-      - key: ENVIRONMENT
-        value: production
-      - key: DEMO_MODE
-        value: "true"
-      - key: COOKIE_SECURE
-        value: "true"
-      - key: STORAGE_BACKEND
-        value: s3
-      - key: S3_REGION
-        value: auto
-      - key: LOG_LEVEL
-        value: INFO
-      # Generated once by Render and shared by both services (any long random string works for both)
-      - key: SECRET_KEY
-        generateValue: true
-      - key: ENCRYPTION_KEY
-        generateValue: true
+# One container, one process (deploy/Dockerfile, the all-in-one role): the API in demo mode with its tasks and
+# scheduler in background threads, SQLite and local files, Chromium for form filling. It fits the free 512 MB.
+# The free plan sleeps after 15 minutes without visitors and wakes on the next one (about a minute); its disk is
+# wiped on every restart, which suits a demo that resets every night anyway.
+#
+# The always-on setup on paid instances (Neon, Upstash, R2, a separate worker) is deploy/render-always-on.yaml:
+# New > Blueprint > this repository > Blueprint path "deploy/render-always-on.yaml".
 
 services:
   - type: web
     name: hireflow-api
     runtime: docker
-    dockerfilePath: ./backend/Dockerfile
+    plan: free
+    region: singapore
+    dockerfilePath: ./deploy/Dockerfile
     dockerContext: .
-    dockerCommand: /app/docker-entrypoint.sh api   # applies migrations, then serves on $PORT
-    preDeployCommand: python scripts/migrate.py      # on paid plans; the API also migrates on start
     healthCheckPath: /health
-    plan: starter
-    region: singapore
-    autoDeployTrigger: checksPass                    # deploy main only after CI is green
+    autoDeployTrigger: commit          # redeploy on every push to main
     envVars:
-      - fromGroup: hireflow-demo
-      - key: API_WORKERS
-        value: "1"
-      - key: DB_POOL_SIZE
-        value: "5"
-      - key: DATABASE_URL          # Neon: the direct (non-pooled) connection string, ?sslmode=require
-        sync: false
-      - key: REDIS_URL             # Upstash: rediss://default:<password>@<host>:6379
-        sync: false
-      - key: PUBLIC_API_URL        # this service's URL, e.g. https://hireflow-api.onrender.com
-        sync: false
-      - key: FRONTEND_URL          # the Vercel URL, e.g. https://hireflow-demo.vercel.app
-        sync: false
-      - key: CORS_ORIGINS          # the same Vercel URL (comma-separate any custom domain too)
-        sync: false
-      - key: S3_BUCKET
-        sync: false
-      - key: S3_ENDPOINT_URL       # https://<account id>.r2.cloudflarestorage.com
-        sync: false
-      - key: S3_ACCESS_KEY_ID
-        sync: false
-      - key: S3_SECRET_ACCESS_KEY
-        sync: false
-      - key: SENTRY_DSN            # optional
-        sync: false
-      - key: ANTHROPIC_API_KEY     # optional: without an AI key the demo runs on built-in heuristics
-        sync: false
-      - key: DEMO_ANTHROPIC_MODEL  # optional: a cheaper model for the demo
-        sync: false
-
-  - type: worker
-    name: hireflow-worker
-    runtime: docker
-    dockerfilePath: ./backend/Dockerfile
-    dockerContext: .
-    dockerCommand: /app/docker-entrypoint.sh worker-beat   # Celery worker + beat (scans, sends, nightly reset)
-    plan: standard                                          # Chromium needs 1-2 GB of memory
-    region: singapore
-    autoDeployTrigger: checksPass
-    envVars:
-      - fromGroup: hireflow-demo
-      - key: WORKER_CONCURRENCY
-        value: "1"
-      - key: DB_POOL_SIZE
-        value: "3"
-      - key: DATABASE_URL
-        sync: false
-      - key: REDIS_URL
-        sync: false
-      - key: PUBLIC_API_URL        # the API's URL: the worker's browser fills the demo careers site there
-        sync: false
+      # The dashboard on Vercel: sign-in cookies and cross-site checks trust only this origin
       - key: FRONTEND_URL
-        sync: false
-      - key: S3_BUCKET
-        sync: false
-      - key: S3_ENDPOINT_URL
-        sync: false
-      - key: S3_ACCESS_KEY_ID
-        sync: false
-      - key: S3_SECRET_ACCESS_KEY
-        sync: false
-      - key: SENTRY_DSN
-        sync: false
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: DEMO_ANTHROPIC_MODEL
-        sync: false
+        value: https://hireflow-three-woad.vercel.app
+      - key: CORS_ORIGINS
+        value: https://hireflow-three-woad.vercel.app
+      # Generated once by Render; nothing secret is in git (PUBLIC_API_URL defaults to this service's URL)
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      - key: LOG_LEVEL
+        value: INFO
+      # Optional, added later in the dashboard (Environment): ANTHROPIC_API_KEY, or Ollama Cloud (docs/OLLAMA.md).
+      # Without an AI key the demo runs on built-in heuristics.

@@ -23,10 +23,12 @@ case "$1" in
       -s /data/celerybeat-schedule
     ;;
   all-in-one)
-    # One container, no Redis (the free deployment, docs/DEPLOY.md): the API runs its tasks in background
-    # threads and scripts/local_scheduler.py runs the periodic jobs, as ./start.sh does without Redis.
+    # One container, one process, no Redis (the free deployment, docs/DEPLOY.md): the API runs its tasks in
+    # background threads and the periodic jobs in a scheduler thread, so it fits a 512 MB free instance.
     # Without SECRET_KEY / ENCRYPTION_KEY set, it makes its own on first start-up and keeps them in /data
     # (fine for the demo's throwaway SQLite database; set both as secrets when DATABASE_URL is external).
+    # On Render, PUBLIC_API_URL defaults to the service's own URL.
+    export PUBLIC_API_URL="${PUBLIC_API_URL:-${RENDER_EXTERNAL_URL:-http://localhost:${PORT:-8000}}}"
     if [ -z "${SECRET_KEY:-}" ] || [ -z "${ENCRYPTION_KEY:-}" ]; then
       mkdir -p /data && touch /data/.keys && chmod 600 /data/.keys
       grep -q '^SECRET_KEY=' /data/.keys || python -c 'import secrets; print("SECRET_KEY=" + secrets.token_urlsafe(48))' >> /data/.keys
@@ -36,9 +38,8 @@ case "$1" in
       [ -n "${ENCRYPTION_KEY:-}" ] || ENCRYPTION_KEY="$(sed -n 's/^ENCRYPTION_KEY=//p' /data/.keys)"
       export SECRET_KEY ENCRYPTION_KEY
     fi
-    export REDIS_URL="" CELERY_TASK_ALWAYS_EAGER=true
+    export REDIS_URL="" CELERY_TASK_ALWAYS_EAGER=true RUN_SCHEDULER_IN_API=true
     python scripts/migrate.py
-    python scripts/local_scheduler.py &
     exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" \
       --workers 1 --proxy-headers --forwarded-allow-ips="*"
     ;;
