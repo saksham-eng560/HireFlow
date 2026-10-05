@@ -19,6 +19,7 @@ class Storage(Protocol):
     def exists(self, key: str) -> bool: ...
     def delete(self, key: str) -> None: ...
     def delete_prefix(self, prefix: str) -> None: ...
+    def list_prefix(self, prefix: str) -> list[str]: ...
     def presigned_url(self, key: str, expires: int = 3600) -> str | None: ...
 
 
@@ -61,6 +62,12 @@ class LocalStorage:
             shutil.rmtree(path, ignore_errors=True)
         elif path.exists():
             path.unlink()
+
+    def list_prefix(self, prefix: str) -> list[str]:
+        path = self._path(prefix)
+        if not path.is_dir():
+            return []
+        return sorted(p.relative_to(self.root).as_posix() for p in path.rglob("*") if p.is_file())
 
     def presigned_url(self, key: str, expires: int = 3600) -> str | None:
         return None
@@ -107,6 +114,13 @@ class S3Storage:
             objects = [{"Key": obj["Key"]} for obj in page.get("Contents", [])]
             if objects:
                 self.client.delete_objects(Bucket=self.bucket, Delete={"Objects": objects})
+
+    def list_prefix(self, prefix: str) -> list[str]:
+        keys: list[str] = []
+        paginator = self.client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=self.bucket, Prefix=_safe_key(prefix) + "/"):
+            keys += [obj["Key"] for obj in page.get("Contents", [])]
+        return sorted(keys)
 
     def presigned_url(self, key: str, expires: int = 3600) -> str | None:
         return self.client.generate_presigned_url(

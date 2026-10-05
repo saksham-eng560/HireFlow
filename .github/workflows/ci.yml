@@ -104,6 +104,32 @@ jobs:
         env:
           BACKEND_URL: http://localhost:8000
 
+  security:
+    name: Security (dependency audit, secret scan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # gitleaks scans the history too
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: pip-audit (backend dependencies)
+        run: |
+          python -m pip install -U pip pip-audit
+          pip-audit -r backend/requirements.txt --progress-spinner off
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: npm audit (dashboard runtime dependencies)
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high
+      - name: gitleaks (secrets in the code and its history)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: false
+
   extension:
     name: Chrome extension
     runs-on: ubuntu-latest

@@ -9,12 +9,12 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.api.agent import queue_scan, running_scan
-from app.api.deps import DB, CurrentUser
+from app.api.deps import DB, CurrentUser, limiter
 from app.api.resumes import create_resume_from_text
 from app.api.serializers import run_out
 from app.api.users import validate_preferences
@@ -223,7 +223,8 @@ def save_step(body: OnboardingPatch, user: CurrentUser, db: DB) -> dict:
 
 
 @router.post("/complete")
-def complete_onboarding(body: OnboardingComplete, user: CurrentUser, db: DB) -> dict:
+@limiter.limit(settings.RATE_LIMIT_SCAN)  # it can start a scan
+def complete_onboarding(request: Request, body: OnboardingComplete, user: CurrentUser, db: DB) -> dict:
     """Check the required steps, mark onboarding done and (by default) start the first scan."""
     missing = _missing(_done(db, user), user)
     if missing:

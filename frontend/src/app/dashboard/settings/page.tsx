@@ -1018,8 +1018,11 @@ function PrivacyPanel() {
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader><CardTitle>Export your data</CardTitle><CardDescription>Download everything stored about you as JSON (GDPR / CCPA right to access).</CardDescription></CardHeader>
-        <CardContent><a href="/api/v1/users/me/export" className={buttonVariants({ variant: "outline" })}><Download /> Download export</a></CardContent>
+        <CardHeader><CardTitle>Download my data</CardTitle><CardDescription>Everything stored about you (GDPR / CCPA right to access): your data as JSON, plus every file (resumes, tailored PDFs, form screenshots) in the .zip. Passwords and access tokens are never included.</CardDescription></CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          <a href="/api/v1/users/me/export.zip" className={buttonVariants({ variant: "outline" })}><Download /> Data and files (.zip)</a>
+          <a href="/api/v1/users/me/export" className={buttonVariants({ variant: "ghost" })}><Download /> Data only (.json)</a>
+        </CardContent>
       </Card>
       <Card className="border-destructive/40">
         <CardHeader><CardTitle className="text-destructive">Delete my account</CardTitle><CardDescription>Permanently deletes your resumes (database and file storage), applications, e-mails, interviews, OAuth tokens and account. This cannot be undone.</CardDescription></CardHeader>

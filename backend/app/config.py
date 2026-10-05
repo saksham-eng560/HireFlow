@@ -63,6 +63,11 @@ class Settings(BaseSettings):
     COOKIE_NAME: str = "hireflow_session"
     COOKIE_SECURE: bool = False
     RATE_LIMIT_DEFAULT: str = "300/minute"
+    # Stricter limits where abuse costs the most (per client): signing in, signing up, uploads, scans
+    RATE_LIMIT_LOGIN: str = "10/minute;60/hour"
+    RATE_LIMIT_REGISTER: str = "5/minute;30/hour"
+    RATE_LIMIT_UPLOAD: str = "10/minute;60/hour"
+    RATE_LIMIT_SCAN: str = "6/minute;40/hour"
 
     # ---- Database / cache ----
     DATABASE_URL: str = "postgresql+psycopg://hireflow:hireflow@localhost:5432/hireflow"
@@ -265,8 +270,28 @@ class Settings(BaseSettings):
         if not self.ENCRYPTION_KEY:
             problems.append("ENCRYPTION_KEY must be set (python -c \"import os,base64;print(base64.urlsafe_b64encode(os.urandom(32)).decode())\")")
         if not self.COOKIE_SECURE:
-            problems.append("COOKIE_SECURE should be true when served over HTTPS")
+            problems.append("COOKIE_SECURE must be true (production is served over HTTPS only)")
         return problems
+
+    def require_production_ready(self) -> None:
+        """Refuse to start in production with an unsafe configuration (the API and the worker call this)."""
+        if not self.is_production:
+            return
+        problems = self.validate_for_production()
+        if problems:
+            raise RuntimeError("Refusing to start in production:\n  - " + "\n  - ".join(problems))
+
+    @property
+    def trusted_origins(self) -> set[str]:
+        """Origins allowed to send cookie-authenticated changes (the dashboard, the API itself, CORS_ORIGINS)."""
+        from urllib.parse import urlsplit
+
+        origins = set()
+        for url in [*self.cors_origins, self.FRONTEND_URL, self.PUBLIC_API_URL]:
+            parts = urlsplit(url or "")
+            if parts.scheme and parts.netloc:
+                origins.add(f"{parts.scheme}://{parts.netloc}".lower())
+        return origins
 
 
 @lru_cache

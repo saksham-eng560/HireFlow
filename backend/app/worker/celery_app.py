@@ -10,6 +10,8 @@ from app.core.logging_config import configure_logging
 
 configure_logging()
 
+settings.require_production_ready()  # the worker refuses an unsafe production configuration too
+
 celery_app = Celery(
     "hireflow",
     broker=settings.celery_broker,

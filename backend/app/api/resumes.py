@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile, status
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.api.deps import DB, CurrentUser, parse_uuid
+from app.api.deps import DB, CurrentUser, limiter, parse_uuid
 from app.api.serializers import resume_out
+from app.config import settings
 from app.core.storage import get_storage, user_prefix
 from app.models.resume import Resume
 from app.models.user import User
@@ -18,9 +19,9 @@ from app.schemas.resume_content import ResumeContent, normalize_resume
 from app.services.embeddings import embed_text
 from app.services.pdf_generator import TEMPLATES, render_resume_pdf
 from app.services.resume_parser import ResumeParseError, extract_text, parse_resume_text
+from app.services.uploads import MAX_RESUME_BYTES, UploadRejected, check_resume_upload
 
 router = APIRouter(prefix="/resumes", tags=["resumes"])
-MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
 
 def _embed(resume: Resume) -> None:
@@ -55,13 +56,17 @@ def _sync_profile(user, content: dict) -> None:  # type: ignore[no-untyped-def]
 
 
 @router.post("/upload", status_code=201)
-async def upload_resume(user: CurrentUser, db: DB, file: UploadFile = File(...), is_master: bool = Form(True),
+@limiter.limit(settings.RATE_LIMIT_UPLOAD)
+async def upload_resume(request: Request, user: CurrentUser, db: DB, file: UploadFile = File(...), is_master: bool = Form(True),
                         label: str | None = Form(None)) -> dict:
-    data = await file.read()
-    if len(data) > MAX_UPLOAD_BYTES:
-        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "File too large (max 10 MB)")
+    data = await file.read(MAX_RESUME_BYTES + 1)  # never more than the limit (plus one byte to tell) into memory
+    if len(data) > MAX_RESUME_BYTES:
+        raise HTTPException(413, "That file is over 5 MB. Export a smaller PDF and try again.")
     try:
-        text = extract_text(file.filename or "resume", data)
+        checked = check_resume_upload(file.filename, data)
+        text = extract_text(checked.filename, data)
+    except UploadRejected as exc:
+        raise HTTPException(422, str(exc)) from exc
     except ResumeParseError as exc:
         raise HTTPException(422, str(exc)) from exc
     # LLM parsing is blocking I/O; run it in a worker thread
@@ -72,11 +77,12 @@ async def upload_resume(user: CurrentUser, db: DB, file: UploadFile = File(...),
         parsed["personal_info"]["email"] = user.email
     if not parsed["personal_info"].get("name"):
         parsed["personal_info"]["name"] = user.full_name
-    ext = (file.filename or "resume.pdf").rsplit(".", 1)[-1].lower()[:5]
-    key = get_storage().save(f"{user_prefix(user.id)}/uploads/{uuid.uuid4().hex}.{ext}", data, file.content_type)
+    # Stored under a random name with the type we detected: never the name or type the browser sent
+    key = get_storage().save(f"{user_prefix(user.id)}/uploads/{uuid.uuid4().hex}.{checked.extension}", data,
+                             checked.content_type)
     resume = Resume(
-        user_id=user.id, label=label or f"Master resume ({file.filename})", original_file_url=key,
-        original_filename=file.filename, raw_text=text, parsed_content=parsed, is_master=False,
+        user_id=user.id, label=(label or f"Master resume ({checked.filename})")[:255], original_file_url=key,
+        original_filename=checked.filename, raw_text=text, parsed_content=parsed, is_master=False,
     )
     db.add(resume)
     db.flush()
@@ -107,7 +113,8 @@ def create_resume_from_text(db: Session, user: User, text: str, label: str | Non
 
 
 @router.post("/from-text", status_code=201)
-def create_from_text(body: ResumeCreateFromText, user: CurrentUser, db: DB) -> dict:
+@limiter.limit(settings.RATE_LIMIT_UPLOAD)
+def create_from_text(request: Request, body: ResumeCreateFromText, user: CurrentUser, db: DB) -> dict:
     resume, method = create_resume_from_text(db, user, body.text, body.label, body.is_master)
     return {**resume_out(resume), "parse_method": method}
 

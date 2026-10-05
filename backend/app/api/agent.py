@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import DB, CurrentUser, parse_uuid
+from app.api.deps import DB, CurrentUser, limiter, parse_uuid
 from app.api.serializers import run_out
+from app.config import settings
 from app.models.agent_run import AgentRun
 from app.models.application import Application
 from app.models.enums import ApplicationStatus
@@ -50,7 +51,8 @@ def queue_scan(db: Session, user: User, requested: list[str] | None = None) -> A
 
 
 @router.post("/start-scan", status_code=202)
-def start_scan(body: StartScanRequest, user: CurrentUser, db: DB) -> dict:
+@limiter.limit(settings.RATE_LIMIT_SCAN)
+def start_scan(request: Request, body: StartScanRequest, user: CurrentUser, db: DB) -> dict:
     return run_out(queue_scan(db, user, body.platforms), include_log=True)
 
 

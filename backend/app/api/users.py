@@ -30,7 +30,7 @@ from app.services.ai_setup import PullError, connection_test, llm_section, pull_
 from app.services.google_oauth import has_scope
 from app.services.location_focus import get_season
 from app.services.presets import apply_preset, clamp_daily_cap
-from app.services.privacy import delete_user_data, export_user_data
+from app.services.privacy import delete_user_data, export_user_data, export_zip
 from app.services.progress import send_now as send_progress_now
 from app.services.question_answerer import STANDARD_FIELDS
 from app.submitters import internshala_apply
@@ -419,6 +419,16 @@ def export_data(user: CurrentUser, db: DB) -> Response:
         content=json.dumps(data, indent=2, default=str),
         media_type="application/json",
         headers={"Content-Disposition": f'attachment; filename="hireflow-export-{datetime.now(UTC).date()}.json"'},
+    )
+
+
+@router.get("/export.zip")
+def export_data_zip(user: CurrentUser, db: DB) -> Response:
+    """Download my data: the JSON export plus every stored file, in one zip."""
+    return Response(
+        content=export_zip(db, user),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="hireflow-export-{datetime.now(UTC).date()}.zip"'},
     )
 
 

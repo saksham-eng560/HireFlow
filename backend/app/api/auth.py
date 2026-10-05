@@ -46,7 +46,7 @@ def auth_config() -> dict:
 
 
 @router.post("/register", status_code=201)
-@limiter.limit("10/minute")
+@limiter.limit(settings.RATE_LIMIT_REGISTER)
 def register(request: Request, body: RegisterRequest, response: Response, db: DB) -> dict:
     if not settings.ALLOW_REGISTRATION:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Registration is disabled")
@@ -62,7 +62,7 @@ def register(request: Request, body: RegisterRequest, response: Response, db: DB
 
 
 @router.post("/login")
-@limiter.limit("20/minute")
+@limiter.limit(settings.RATE_LIMIT_LOGIN)
 def login(request: Request, body: LoginRequest, response: Response, db: DB) -> dict:
     user = db.scalar(select(User).where(func.lower(User.email) == body.email.lower()))
     if user is None or not verify_password(body.password, user.hashed_password):

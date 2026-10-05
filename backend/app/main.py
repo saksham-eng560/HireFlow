@@ -6,10 +6,11 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy import text
@@ -31,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    settings.require_production_ready()  # no default SECRET_KEY, no missing ENCRYPTION_KEY, cookies over HTTPS only
     await asyncio.to_thread(wait_for_db)
     if settings.is_sqlite:
         # Zero-setup local mode: create tables directly (PostgreSQL uses Alembic migrations).
@@ -40,9 +42,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     llm = get_llm()
     logger.info("HireFlow API ready (env=%s, llm=%s, db=%s)", settings.ENVIRONMENT,
                 llm.provider_names or "heuristics-only", engine.dialect.name)
-    if settings.is_production:
-        for problem in settings.validate_for_production():
-            logger.warning("CONFIG: %s", problem)
     yield
     await manager.stop_subscriber()
 
@@ -74,6 +73,29 @@ def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse
     return JSONResponse({"detail": f"Rate limit exceeded: {exc.detail}"}, status_code=429)
 
 
+UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+def _origin_of(url: str) -> str:
+    parts = urlsplit(url)
+    return f"{parts.scheme}://{parts.netloc}".lower() if parts.scheme and parts.netloc else url.lower()
+
+
+@app.middleware("http")
+async def csrf_and_https(request: Request, call_next):  # type: ignore[no-untyped-def]
+    """Cookie-authenticated changes must come from the dashboard: a page on another site can't use your session.
+    (Bearer tokens, used by the extension and scripts, can't be sent by another site, so they're not checked.)
+    In production, plain-HTTP requests are redirected to HTTPS."""
+    if settings.is_production and request.headers.get("x-forwarded-proto", "").lower() == "http":
+        return RedirectResponse(str(request.url.replace(scheme="https")), status_code=308)
+    if (request.method in UNSAFE_METHODS and request.cookies.get(settings.COOKIE_NAME)
+            and not request.headers.get("authorization")):
+        source = request.headers.get("origin") or request.headers.get("referer")
+        if source is not None and _origin_of(source) not in settings.trusted_origins:
+            return JSONResponse({"detail": "Cross-site request blocked"}, status_code=403)
+    return await call_next(request)
+
+
 @app.middleware("http")
 async def attribute_ai_usage(request: Request, call_next):  # type: ignore[no-untyped-def]
     """AI calls made while serving a signed-in request count against that user's daily budget."""
@@ -94,6 +116,8 @@ async def security_headers(request: Request, call_next):  # type: ignore[no-unty
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")  # resume PDFs preview in same-origin iframes
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    if settings.is_production:
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
     return response
 
 

@@ -39,13 +39,18 @@ export default function ResumePage() {
   }, [master, dirty]);
 
   const onFile = async (file: File) => {
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "That file is over 5 MB", description: "Export a smaller PDF and try again.", tone: "error" });
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
     setUploading(true);
     try {
       const form = new FormData();
       form.append("file", file);
       form.append("is_master", "true");
       const created = await upload<Resume>("/resumes/upload", form);
-      toast({ title: "Resume imported", description: created.parse_method === "llm" ? "Parsed with Claude — please review the result." : "Parsed with the built-in parser — please review the result.", tone: "success" });
+      toast({ title: "Resume imported", description: created.parse_method === "llm" ? "Parsed with AI — please review the result." : "Parsed with the built-in parser — please review the result.", tone: "success" });
       setDirty(false);
       mutate();
     } catch (err) {
