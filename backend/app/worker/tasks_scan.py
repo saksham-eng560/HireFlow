@@ -39,7 +39,7 @@ def scan_due_users() -> int:
         now = datetime.now(UTC)
         for user in users:
             prefs = user.prefs
-            if not prefs.get("scan_enabled", True):
+            if not prefs.get("scan_enabled", True) or user.automation_paused_at is not None:
                 continue
             interval = timedelta(hours=int(prefs.get("scan_interval_hours") or 6))
             if user.last_scan_at and now - user.last_scan_at < interval:

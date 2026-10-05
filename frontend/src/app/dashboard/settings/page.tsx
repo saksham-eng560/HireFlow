@@ -47,7 +47,7 @@ function MassApplyPanel() {
   const set = <K extends keyof Preferences>(k: K, v: Preferences[K]) => setPrefs({ ...prefs, [k]: v });
   const save = () => run(async () => {
     await put("/users/me/preferences", { preferences: {
-      review_mode: prefs.review_mode, resume_strategy: prefs.resume_strategy, auto_submit_kept: prefs.auto_submit_kept, trust_generated_answers: prefs.trust_generated_answers,
+      review_mode: prefs.review_mode, resume_strategy: prefs.resume_strategy, auto_submit_kept: prefs.auto_submit_kept, dry_run: prefs.dry_run, trust_generated_answers: prefs.trust_generated_answers,
       auto_keep_min_score: prefs.auto_keep_min_score, max_jobs_per_source: prefs.max_jobs_per_source,
       exclude_no_sponsorship: prefs.exclude_no_sponsorship, max_applications_per_day: prefs.max_applications_per_day,
       internshala_share: prefs.internshala_share ?? 25, internshala_per_scan: prefs.internshala_per_scan ?? 10,
@@ -112,8 +112,11 @@ function MassApplyPanel() {
               ))}
             </div>
           </Row>
-          <Row label="Apply automatically after I keep" hint="Kept jobs are submitted as soon as the form is filled. Blank eligibility questions always wait for you.">
+          <Row label="Apply automatically after I keep" hint="Once a kept job's form is filled, it waits 10 minutes in “Sending soon” (so you can stop it), then it's sent. Blank eligibility questions always wait for you.">
             <Switch checked={prefs.auto_submit_kept} onCheckedChange={(v) => set("auto_submit_kept", v)} label="Apply automatically after keeping" />
+          </Row>
+          <Row label="Dry run" hint="Forms are filled and screenshotted, but Submit is never clicked: see exactly what would be sent before anything is. Each one waits in Ready to submit with its screenshot.">
+            <Switch checked={!!prefs.dry_run} onCheckedChange={(v) => set("dry_run", v)} label="Dry run" />
           </Row>
           <Row label="Trust AI answers to open questions" hint="“Why this company?”-style answers written by the agent won't hold a kept job back. Visa, work authorization and background questions are never guessed.">
             <Switch checked={prefs.trust_generated_answers} onCheckedChange={(v) => set("trust_generated_answers", v)} label="Trust generated answers" />

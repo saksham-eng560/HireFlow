@@ -11,7 +11,7 @@ worker always sees the rows the task depends on.
 from __future__ import annotations
 
 import logging
-import time
+import threading
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
@@ -61,8 +61,6 @@ def _run_local(name: str, args: tuple[Any, ...], countdown: int | None) -> None:
     fn = _registry[name]
 
     def job() -> None:
-        if countdown:
-            time.sleep(countdown)
         try:
             fn(*args)
         except Exception:
@@ -71,6 +69,11 @@ def _run_local(name: str, args: tuple[Any, ...], countdown: int | None) -> None:
     if _inline["enabled"]:
         if not countdown:  # delayed retries are dropped in inline mode
             fn(*args)
+        return
+    if countdown:  # wait on a timer, not in a worker thread: a long wait never blocks other tasks
+        timer = threading.Timer(countdown, lambda: _executor.submit(job))
+        timer.daemon = True
+        timer.start()
         return
     _executor.submit(job)
 

@@ -10,6 +10,7 @@ from collections.abc import Iterator
 from email.parser import BytesParser
 from email.policy import default as email_policy
 from pathlib import Path
+from typing import Any
 from urllib.parse import parse_qs
 
 import pytest
@@ -170,7 +171,8 @@ def test_full_pipeline(auth_client: TestClient, master_resume: dict, mock_site: 
 
 
 @pytest.mark.skipif(not _chromium_available(), reason="Chromium not available")
-def test_swipe_keep_then_auto_submit(auth_client: TestClient, master_resume: dict, mock_site: MockSite) -> None:
+def test_swipe_keep_then_auto_submit(auth_client: TestClient, master_resume: dict, mock_site: MockSite,
+                                     send_held: Any) -> None:
     """Swipe Review: a low score never skips the job; keeping it prepares, fills and submits it."""
     c = auth_client
     base = f"http://127.0.0.1:{mock_site.port}"
@@ -212,11 +214,17 @@ def test_swipe_keep_then_auto_submit(auth_client: TestClient, master_resume: dic
     with run_inline():  # you check it and mark it legit: what was held only for that goes out
         r = c.post("/api/v1/jobs/company-trust", json={"company": "Acme Robotics", "trusted": True})
         assert r.json()["applications_updated"] == 1, r.text
+    # ...after the undo window: it waits in "Sending soon" first
+    soon = c.get(f"/api/v1/applications/{app_id}").json()
+    assert soon["status"] == "approved" and soon["send_after"] and soon["hold_reason"].startswith("Sending soon")
+    assert mock_site.submissions == [] and c.get("/api/v1/agent/status").json()["sending_soon"] == 1
+    assert send_held() == 1
     final = c.get(f"/api/v1/applications/{app_id}").json()
     history = [h["new_status"] for h in final["history"]]
     assert final["status"] == "applied", (final["status"], final["error_log"], final["custom_answers"])
     assert final["job"]["company"]["verdict"] == "verified"
     assert history[-4:] == ["preparing", "pending_approval", "approved", "applied"]
+    assert final["send_after"] is None and final["form_screenshot_url"] and final["confirmation_screenshot_url"]
     assert len(mock_site.submissions) == 1 and mock_site.submissions[0]["sponsor"] == "No"
     assert mock_site.submissions[0]["why"].startswith("I'm interested in Acme Robotics")
     assert c.get("/api/v1/review/queue").json()["stats"]["kept_total"] == 1

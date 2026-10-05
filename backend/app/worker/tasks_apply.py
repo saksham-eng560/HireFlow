@@ -6,8 +6,9 @@ import logging
 
 from app.core.database import session_scope
 from app.services import agent_orchestrator as orch
+from app.services import guardrails
 from app.worker.celery_app import celery_app
-from app.worker.dispatch import register
+from app.worker.dispatch import enqueue, register
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,16 @@ def submit_application(application_id: str) -> None:
         orch.submit_application(db, application_id)
 
 
+@register("send_due_applications")
+def send_due_applications() -> int:
+    """Every minute: send held applications whose time has come ("Sending soon", daily / company limits)."""
+    with session_scope() as db:
+        claimed = guardrails.claim_due(db)
+    for application_id in claimed:  # claimed and committed first, so no other sweep sends them too
+        enqueue("submit_application", application_id)
+    return len(claimed)
+
+
 @celery_app.task(name="hireflow.prepare_application", soft_time_limit=900)
 def prepare_application_task(application_id: str) -> None:
     prepare_application(application_id)
@@ -43,3 +54,8 @@ def stage_application_task(application_id: str) -> None:
 @celery_app.task(name="hireflow.submit_application", soft_time_limit=600)
 def submit_application_task(application_id: str) -> None:
     submit_application(application_id)
+
+
+@celery_app.task(name="hireflow.send_due_applications")
+def send_due_applications_task() -> int:
+    return send_due_applications()

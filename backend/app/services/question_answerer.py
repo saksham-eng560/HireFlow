@@ -153,10 +153,14 @@ class _Ctx:
         self.job = job
         self.links = links or {}  # your profile links (LinkedIn, GitHub, portfolio, LeetCode...): link questions only
         self.question = ""  # the (normalized) question being answered
+        self.from_saved = False  # the answer being built came from one of your saved answers
 
     def m(self, key: str) -> str | None:
         value = self.mappings.get(key)
-        return value.strip() if isinstance(value, str) and value.strip() else None
+        found = value.strip() if isinstance(value, str) and value.strip() else None
+        if found:
+            self.from_saved = True
+        return found
 
     def link(self, key: str) -> str | None:
         value = self.links.get(key)
@@ -287,7 +291,7 @@ RULES: list[tuple[re.Pattern[str], Callable[[_Ctx], tuple[str | None, float]]]] 
      _mapping("availability_months")),
     (re.compile(r"notice period|start date|when can you start|earliest.*start|available to start"), _start_date),
     (re.compile(r"how did you (?:hear|find|learn)|where did you (?:hear|find)|referr?al source|source of application"), _mapping("how_did_you_hear", "Job board", 0.6)),
-    (re.compile(r"18 years|over 18|at least 18|legal age"), _mapping("over_18", "Yes", 0.8)),
+    (re.compile(r"18 years|over 18|at least 18|legal age"), _mapping("over_18")),
     (re.compile(r"highest (?:level of )?(?:education|degree|qualification)"), _mapping_or("highest_education", _edu("degree"), 0.8)),
     (re.compile(r"pronoun"), _mapping("pronouns")),
     (re.compile(r"hispanic|latino"), _eeo("hispanic_latino")),
@@ -344,6 +348,7 @@ def rule_based_answer(question: dict[str, Any], ctx: _Ctx) -> dict[str, Any] | N
     field_type = question.get("field_type") or ("select" if options else "text")
     direct = _field_mapping_lookup(text, ctx.mappings)
     ctx.question = text
+    ctx.from_saved = False
     if direct:
         answer, confidence = direct, 0.97
     else:
@@ -352,6 +357,8 @@ def rule_based_answer(question: dict[str, Any], ctx: _Ctx) -> dict[str, Any] | N
             if pattern.search(text):
                 answer, confidence = resolver(ctx)
                 break
+    if answer is not None and not direct and not ctx.from_saved and is_eligibility(text):
+        answer = None  # eligibility is never guessed (no defaults, no reading it off the resume): only your saved answer
     if answer is None:
         return None
     if options:
@@ -395,6 +402,11 @@ LEARNABLE: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"notice period|when can you start|earliest.*start|available to start"), "notice_period"),
     (re.compile(r"highest (?:level of )?(?:education|degree)"), "highest_education"),
 ]
+
+
+def is_eligibility(question: str) -> bool:
+    """Visa, work authorization, record checks, age, ID numbers...: facts only you can state."""
+    return bool(FACTUAL.search(normalize_text(question)))
 
 
 def learnable_key(question: str) -> str | None:
@@ -452,6 +464,8 @@ def answer_questions(
         ans = rule_based_answer(q, ctx)
         if ans is not None:
             answers[idx] = ans
+        elif is_eligibility(q.get("question") or ""):
+            answers[idx] = fallback_answer(q, ctx)  # left blank for you: never sent to the LLM to guess
         else:
             pending.append((idx, q))
 

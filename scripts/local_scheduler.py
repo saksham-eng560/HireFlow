@@ -27,6 +27,7 @@ log = logging.getLogger("scheduler")
 # (task name, interval in seconds, run on start-up?)
 SCHEDULE: list[tuple[str, int, bool]] = [
     ("scan_due_users", 60 * 60, True),
+    ("send_due_applications", 60, True),  # "Sending soon" and limit-held applications, once they're due
     ("check_all_emails", max(60, settings.EMAIL_POLL_MINUTES * 60), False),
     ("send_interview_reminders", 10 * 60, False),
     ("renew_gmail_watches", 24 * 3600, False),

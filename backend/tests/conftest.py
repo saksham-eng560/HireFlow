@@ -147,6 +147,30 @@ class FakeProvider:
 
 
 @pytest.fixture
+def send_held() -> Any:
+    """Fast-forward the undo window (and any limit hold): everything held is due now, then run the
+    once-a-minute sweep inline. Limits are checked again when it's sent, so a real hold just comes back."""
+
+    def run() -> int:
+        from datetime import UTC, datetime, timedelta
+
+        from sqlalchemy import update
+
+        from app.models.application import Application
+        from app.worker.dispatch import run_inline
+        from app.worker.tasks_apply import send_due_applications
+
+        with SessionLocal() as session:
+            session.execute(update(Application).where(Application.send_after.is_not(None))
+                            .values(send_after=datetime.now(UTC) - timedelta(seconds=1)))
+            session.commit()
+        with run_inline():
+            return send_due_applications()
+
+    return run
+
+
+@pytest.fixture
 def fake_llm() -> Any:
     def install(responses: dict[str, Any], fail: Exception | None = None) -> FakeProvider:
         provider = FakeProvider(responses, fail)

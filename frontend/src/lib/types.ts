@@ -60,6 +60,8 @@ export interface Preferences {
   scan_top_companies?: boolean;
   review_mode: "swipe" | "auto";
   auto_submit_kept: boolean;
+  /** Forms are filled and screenshotted, but Submit is never clicked. */
+  dry_run: boolean;
   trust_generated_answers: boolean;
   resume_strategy: "original" | "light" | "full";
   auto_keep_min_score: number | null;
@@ -93,7 +95,7 @@ export interface ProfileLink {
 
 export type RemotePreference = "remote" | "hybrid" | "onsite" | "any";
 export type AnswerKey =
-  | "work_authorization" | "requires_sponsorship" | "earliest_start_date" | "availability_months" | "willing_to_relocate"
+  | "work_authorization" | "over_18" | "requires_sponsorship" | "earliest_start_date" | "availability_months" | "willing_to_relocate"
   | "notice_period" | "pronouns" | "gender" | "race_ethnicity" | "hispanic_latino" | "veteran_status" | "disability_status";
 
 export interface OnboardingStepInfo {
@@ -318,6 +320,9 @@ export interface ApplicationSummary {
   created_at: string;
   updated_at: string;
   submitted_at: string | null;
+  /** Approved but held until then ("Sending soon", or a daily / per-company limit); hold_reason says which. */
+  send_after: string | null;
+  hold_reason: string | null;
   job: Job | null;
   /** You clicked "I Applied" (applied on your own) rather than the agent submitting it. */
   self_applied?: boolean;
@@ -500,6 +505,12 @@ export interface AgentStatus {
   linkedin_connected: boolean;
   to_review: number;
   review_mode: "swipe" | "auto";
+  /** Approved and waiting to go out: the undo window of an automatic submit, or a daily / per-company limit. */
+  sending_soon: number;
+  /** "Pause everything" is on: nothing is scanned, prepared or sent. */
+  paused: boolean;
+  paused_at: string | null;
+  dry_run: boolean;
 }
 
 export interface ReviewCard {

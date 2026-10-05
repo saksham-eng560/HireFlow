@@ -140,6 +140,8 @@ def validate_preferences(prefs: dict) -> None:  # type: ignore[type-arg]
         raise HTTPException(422, "max_jobs_per_source must be empty or 10-1000")
     if not isinstance(prefs.get("notification_popups"), bool):
         raise HTTPException(422, "notification_popups must be true or false")
+    if not isinstance(prefs.get("dry_run"), bool):
+        raise HTTPException(422, "dry_run must be true or false")
     _validate_focus(prefs)
     _validate_internshala(prefs)
 

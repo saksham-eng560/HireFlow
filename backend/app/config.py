@@ -137,6 +137,8 @@ class Settings(BaseSettings):
     MAX_LLM_EVALUATIONS_PER_SCAN: int = 40
     # Hard ceiling on applications a day: no preference, preset or the UI can go above it (default 10 for new users)
     MAX_APPLICATIONS_PER_DAY_CEILING: int = 25
+    # At most this many applications to one company in any 7 days (one per role: duplicates are never sent)
+    MAX_APPLICATIONS_PER_COMPANY_PER_WEEK: int = 3
     # ---- Scan speed ----
     SCAN_SOURCE_CONCURRENCY: int = 8  # job sources (platforms) searched at the same time
     SCRAPER_BOARD_CONCURRENCY: int = 6  # company boards / pages fetched at once within one source

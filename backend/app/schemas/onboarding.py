@@ -137,6 +137,7 @@ class AnswersStep(_Step):
     """Questions only you can answer. Each is saved as a field mapping, so forms use it; nothing here is guessed."""
 
     work_authorization: YesNo
+    over_18: YesNo | None = None
     requires_sponsorship: YesNoPreferNot | None = None
     earliest_start_date: dt.date | None = None
     availability_months: int | None = Field(default=None, ge=1, le=24)

@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  AlertTriangle, ArrowLeft, Building2, CheckCircle2, Download, ExternalLink, FileText, ListChecks, MapPin, RefreshCw, Save,
-  ShieldCheck, Sparkles, XCircle,
+  AlertTriangle, ArrowLeft, Building2, CheckCircle2, Clock, Download, ExternalLink, FileText, ListChecks, MapPin, RefreshCw, Save,
+  Send, ShieldCheck, Sparkles, Undo2, XCircle,
 } from "lucide-react";
 import { ApprovalModal } from "@/components/approval-modal";
 import { IAppliedButton, SelfAppliedTag, canSelfApply } from "@/components/i-applied-button";
@@ -148,8 +148,26 @@ export default function ApplicationDetailPage() {
           The agent is tailoring your resume, writing the cover letter and filling out the form…
         </div>
       )}
-      {app.status === "approved" && (
-        <div className="mb-4 flex items-center gap-3 border border-primary/30 bg-primary/5 p-3 text-sm">
+      {app.status === "approved" && app.send_after && (
+        <div className="mb-4 flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm sm:flex-row sm:items-center">
+          <Clock className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+          <p className="flex-1">{app.hold_reason || `Goes out at ${formatDateTime(app.send_after)}`}</p>
+          <div className="flex shrink-0 gap-2">
+            <Button size="sm" variant="outline" loading={busy === "cancel-send"}
+              onClick={() => run("cancel-send", () => post(`/applications/${app.id}/cancel-send`), "Stopped: nothing was sent")}>
+              <Undo2 /> Stop
+            </Button>
+            {(app.hold_reason || "").startsWith("Sending soon") && (
+              <Button size="sm" variant="ghost" loading={busy === "send-now"}
+                onClick={() => run("send-now", () => post(`/applications/${app.id}/send-now`), "Sending now")}>
+                <Send /> Send now
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+      {app.status === "approved" && !app.send_after && (
+        <div className="mb-4 flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           Approved — submitting now. {app.notes}
         </div>
@@ -193,7 +211,10 @@ export default function ApplicationDetailPage() {
             <Card className="xl:col-span-3">
               <CardHeader>
                 <CardTitle>Form screenshot</CardTitle>
-                <CardDescription>{app.staged_at ? `Filled ${formatDateTime(app.staged_at)} — not submitted` : "The form hasn't been filled yet"}</CardDescription>
+                <CardDescription>
+                  {app.confirmation_screenshot_url ? `What was sent: the form just before Submit was clicked (${formatDateTime(app.submitted_at)})`
+                    : app.staged_at ? `Filled ${formatDateTime(app.staged_at)} — not submitted` : "The form hasn't been filled yet"}
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 {app.form_screenshot_url ? (

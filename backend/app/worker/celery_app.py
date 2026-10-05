@@ -43,6 +43,7 @@ celery_app.conf.update(
     task_default_queue="default",
     beat_schedule={
         "scan-due-users": {"task": "hireflow.scan_due_users", "schedule": crontab(minute=7)},
+        "send-due-applications": {"task": "hireflow.send_due_applications", "schedule": 60.0},
         "check-all-emails": {
             "task": "hireflow.check_all_emails",
             "schedule": max(60, settings.EMAIL_POLL_MINUTES * 60),

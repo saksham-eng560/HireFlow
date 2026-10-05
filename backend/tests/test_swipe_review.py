@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import respx
@@ -235,8 +236,19 @@ def test_stale_prepare_tasks_never_submit_twice(auth_client: TestClient, master_
     assert tasks == [first, first, second]
     for app_id in tasks:
         _prepare(app_id)
-    assert [a for a in queued if a[0] == "submit_application"] == [("submit_application", first)]
+    # Automatic submits wait in "Sending soon" (nothing is queued yet), and only one copy waits
+    assert [a for a in queued if a[0] == "submit_application"] == []
+    assert [a for a in (first, second) if auth_client.get(f"/api/v1/applications/{a}").json()["send_after"]] == [first]
     assert auth_client.get(f"/api/v1/applications/{second}").json()["status"] == "skipped"
+    # However often the sweep runs once it's due, it's sent once
+    from app.worker.tasks_apply import send_due_applications
+
+    with SessionLocal() as db:
+        db.get(Application, uuid.UUID(first)).send_after = datetime.now(UTC) - timedelta(seconds=1)
+        db.commit()
+    monkeypatch.setattr("app.worker.tasks_apply.enqueue", lambda *a, **k: queued.append(a))
+    assert send_due_applications() == 1 and send_due_applications() == 0
+    assert [a for a in queued if a[0] == "submit_application"] == [("submit_application", first)]
 
 
 def test_undo_during_preparation_is_respected(auth_client: TestClient, master_resume: dict, monkeypatch) -> None:
@@ -354,7 +366,7 @@ def test_no_write_lock_held_through_llm_calls(auth_client: TestClient, master_re
             return fn(*args, **kwargs)
         return wrapper
 
-    queued = _capture_enqueue(monkeypatch)
+    _capture_enqueue(monkeypatch)  # nothing runs in the background
     monkeypatch.setitem(SCRAPERS, "fakeboard", _FakeBoard)
     for name in ("evaluate_match", "tailor_resume", "generate_cover_letter"):
         monkeypatch.setattr(f"app.services.agent_orchestrator.{name}", probing(name, getattr(orch, name)))
@@ -374,7 +386,8 @@ def test_no_write_lock_held_through_llm_calls(auth_client: TestClient, master_re
     probes.clear()
     _prepare(app_id)
     assert probes == [("tailor_resume", True), ("generate_cover_letter", True)]
-    assert queued[-1] == ("submit_application", app_id)
+    detail = auth_client.get(f"/api/v1/applications/{app_id}").json()
+    assert detail["status"] == "approved" and detail["send_after"]  # in "Sending soon"
 
 
 def test_env_inline_comments_are_not_values(tmp_path) -> None:

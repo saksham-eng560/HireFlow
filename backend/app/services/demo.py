@@ -49,6 +49,7 @@ SAMPLE_PROFILE: dict[str, Any] = {
     },
     "answers": {
         "work_authorization": "Yes",
+        "over_18": "Yes",
         "requires_sponsorship": "No",
         "availability_months": 3,
         "willing_to_relocate": "Yes",

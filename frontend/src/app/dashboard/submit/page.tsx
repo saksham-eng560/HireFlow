@@ -14,6 +14,7 @@ import { IAppliedButton } from "@/components/i-applied-button";
 import { Modal } from "@/components/modal";
 import { EASE_OUT } from "@/components/motion";
 import { PageHeader } from "@/components/page-header";
+import { SendingSoon } from "@/components/sending-soon";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -476,6 +477,7 @@ function SubmitInner() {
       <PageHeader eyebrow="Mass apply" title="Ready to submit"
         description="The agent filled these forms and stopped short of Submit. Say yes or no to each prefilled item, fix anything that's wrong right here, then send it with one click."
         actions={<Link href="/dashboard/review" className={buttonVariants({ variant: "ghost" })}><Layers /> Swipe Review</Link>} />
+      <SendingSoon />
 
       {isLoading ? (
         <div className="mx-auto max-w-[880px] space-y-3">

@@ -18,7 +18,7 @@ WELCOME = {"full_name": "Jane Doe", "phone": "+1 (415) 555-0100", "location": "S
 TARGETS = {"target_roles": ["Software Engineer Intern"], "target_locations": ["San Francisco, CA", "Remote"],
            "remote_preference": "any", "year_of_study": 2, "focus_skills": ["Python"], "expected_stipend": 6000}
 ANSWERS = {"work_authorization": "Yes", "requires_sponsorship": "No", "earliest_start_date": "2027-05-15",
-           "availability_months": 3, "willing_to_relocate": "Prefer not to say", "gender": "Prefer not to say"}
+           "availability_months": 3, "willing_to_relocate": "Prefer not to say", "over_18": "Yes", "gender": "Prefer not to say"}
 
 
 def patch(client: TestClient, step: int, data: dict[str, Any] | None = None, skip: bool = False):  # type: ignore[no-untyped-def]
@@ -130,7 +130,7 @@ def test_saved_answers_become_field_mappings(auth_client: TestClient) -> None:
     mappings = {m["field_name"]: m["field_value"] for m in auth_client.get("/api/v1/users/me/field-mappings").json()["mappings"]}
     assert mappings["work_authorization"] == "Yes" and mappings["requires_sponsorship"] == "No"
     assert mappings["earliest_start_date"] == "2027-05-15" and mappings["availability_months"] == "3"
-    assert mappings["willing_to_relocate"] == "Prefer not to say"
+    assert mappings["willing_to_relocate"] == "Prefer not to say" and mappings["over_18"] == "Yes"
     # Sending an answer as null clears it; answers you didn't send stay
     patch(auth_client, 5, {"work_authorization": "Yes", "requires_sponsorship": None})
     mappings = {m["field_name"]: m["field_value"] for m in auth_client.get("/api/v1/users/me/field-mappings").json()["mappings"]}

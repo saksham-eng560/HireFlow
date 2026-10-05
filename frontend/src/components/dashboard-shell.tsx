@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/brand";
 import { NotificationBell } from "@/components/notification-bell";
+import { PausedBanner, PauseButton } from "@/components/pause-control";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -122,6 +123,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       });
       return;
     }
+    if (event.type === "agent_paused") {
+      void mutate("/agent/status");
+      return;
+    }
     if (event.type === "application_updated" || event.type === "agent_run_updated") {
       mutate((key) => typeof key === "string" && ["/applications", "/agent", "/analytics", "/jobs", "/review"].some((p) => key.startsWith(p)));
     }
@@ -223,6 +228,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               <Layers className="h-3.5 w-3.5" /> {status.to_review} to swipe
             </Link>
           )}
+          <PauseButton status={status} />
           <NotificationBell />
           <ThemeToggle />
           <DropdownMenu>
@@ -248,6 +254,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             </DropdownMenuContent>
           </DropdownMenu>
         </header>
+        <PausedBanner status={status} />
         <main className="flex-1 p-4 sm:p-6 lg:p-10">{children}</main>
       </div>
     </div>

@@ -66,6 +66,7 @@ DEFAULT_PREFERENCES: dict[str, Any] = {
     "review_mode": "swipe",
     "resume_strategy": "original",  # original (your file, untouched) | light (reorder only) | full (AI rewrite)
     "auto_submit_kept": False,      # on: kept jobs are submitted once filled, unless a question needs you (off for new users)
+    "dry_run": False,               # on: forms are filled and screenshotted, but Submit is never clicked (on in the demo)
     "trust_generated_answers": True,  # AI-written open-ended answers don't hold a kept job back
     "auto_keep_min_score": None,    # optionally keep jobs scoring at least this without swiping
     "max_jobs_per_source": None,    # None = server default (MAX_JOBS_PER_SOURCE)
@@ -131,6 +132,9 @@ class User(Base):
     # First-run onboarding (/onboarding): the step you're on, and when you finished it (None = not yet)
     onboarding_step: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
     onboarding_completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+    # "Pause everything" (header switch): while set, nothing is scanned, prepared or sent
+    automation_paused_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
     # OAuth tokens (AES-256-GCM encrypted at rest)
     google_access_token: Mapped[str | None] = mapped_column(EncryptedText)

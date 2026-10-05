@@ -17,9 +17,9 @@ from app.models.user import User
 from app.schemas.agent import StartScanRequest
 from app.scrapers import SCRAPERS
 from app.services import agent_orchestrator as orch
+from app.services import guardrails
 from app.services.agent_orchestrator import get_master_resume
 from app.services.notifier import push_update
-from app.services.rate_limiter import rate_limiter
 from app.worker.dispatch import enqueue
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -33,6 +33,8 @@ def running_scan(db: Session, user: User) -> AgentRun | None:
 
 def queue_scan(db: Session, user: User, requested: list[str] | None = None) -> AgentRun:
     """Start a scan of your sources (also used by onboarding's "Run my first scan")."""
+    if user.automation_paused_at is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "HireFlow is paused. Resume it to scan.")
     platforms = orch.scan_platforms(user.prefs, requested)  # your sources, plus the top companies
     unknown = [p for p in platforms if p not in SCRAPERS]
     if unknown:
@@ -71,8 +73,14 @@ def agent_status(user: CurrentUser, db: DB) -> dict:
         "pending_approval": counts.get(ApplicationStatus.PENDING_APPROVAL, 0),
         "preparing": counts.get(ApplicationStatus.PREPARING, 0),
         "approved": counts.get(ApplicationStatus.APPROVED, 0),
-        "applied_today": rate_limiter.applications_today(str(user.id)),
-        "daily_limit": prefs.get("max_applications_per_day"),
+        "sending_soon": db.scalar(select(func.count()).select_from(Application).where(
+            Application.user_id == user.id, Application.status == ApplicationStatus.APPROVED,
+            Application.send_after.is_not(None))) or 0,
+        "applied_today": guardrails.applied_today(db, user),
+        "daily_limit": guardrails.daily_cap(user),
+        "paused": guardrails.is_paused(user),
+        "paused_at": user.automation_paused_at.isoformat() if user.automation_paused_at else None,
+        "dry_run": guardrails.dry_run(user),
         "running_runs": [run_out(r) for r in running],
         "last_scan_at": user.last_scan_at.isoformat() if user.last_scan_at else None,
         "next_scan_at": next_scan,
@@ -80,6 +88,23 @@ def agent_status(user: CurrentUser, db: DB) -> dict:
         "google_connected": user.google_connected,
         "linkedin_connected": bool(user.linkedin_session_cookie),
     }
+
+
+@router.post("/pause")
+def pause(user: CurrentUser, db: DB) -> dict:
+    """Pause everything: no scans, no preparation, nothing sent, until you resume."""
+    orch.pause_everything(db, user)
+    db.flush()
+    push_update(str(user.id), "agent_paused", {"paused": True})
+    return agent_status(user, db)
+
+
+@router.post("/resume")
+def resume(user: CurrentUser, db: DB) -> dict:
+    orch.resume_everything(db, user)
+    db.flush()
+    push_update(str(user.id), "agent_paused", {"paused": False})
+    return agent_status(user, db)
 
 
 @router.get("/runs")

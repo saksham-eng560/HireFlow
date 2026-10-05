@@ -56,6 +56,10 @@ export function AnswersStep({ initial, onSave, onBack, saving }: StepProps<Answe
           {() => <RadioCards name="work_authorization" label="Work authorization" columns={2} value={form.work_authorization as "Yes" | "No" | null}
             onChange={(v) => set("work_authorization", v)} options={[...YES_NO]} />}
         </Field>
+        <Field label="Are you 18 or older?">
+          {() => <RadioCards name="over_18" label="18 or older" columns={2} value={form.over_18 as "Yes" | "No" | null}
+            onChange={(v) => set("over_18", v)} options={[...YES_NO]} />}
+        </Field>
         <Field label="Will you now or in the future need visa sponsorship?">
           {() => <RadioCards name="requires_sponsorship" label="Visa sponsorship" columns={3} value={form.requires_sponsorship as "Yes" | "No" | typeof PREFER | null}
             onChange={(v) => set("requires_sponsorship", v)} options={[...YES_NO_PREFER]} />}

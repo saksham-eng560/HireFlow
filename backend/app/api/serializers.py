@@ -123,6 +123,9 @@ def application_summary(app: Application, self_applied: bool | None = None) -> d
         "created_at": iso(app.created_at),
         "updated_at": iso(app.updated_at),
         "submitted_at": iso(app.submitted_at),
+        # APPROVED and held until then ("Sending soon", or a daily / per-company limit); ``notes`` says which
+        "send_after": iso(app.send_after),
+        "hold_reason": app.notes if app.send_after else None,
         "job": job_out(job, prefs=app.user.prefs if app.user is not None else None) if job else None,
     }
 
