@@ -53,6 +53,7 @@ e2e:  ## Browser end-to-end test only
 lint:  ## Lint backend, scripts and dashboard
 	cd backend && .venv/bin/ruff check app tests alembic/env.py && .venv/bin/ruff check ../scripts
 	cd frontend && npm run lint && npm run typecheck
+	python3 scripts/check_contrast.py
 
 build:  ## Production build of the dashboard
 	cd frontend && npm run build

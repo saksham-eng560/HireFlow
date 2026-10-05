@@ -35,7 +35,7 @@ export function PipelineMotion({ className }: { className?: string }) {
             transition={{ duration: LOOP / 2, repeat: Infinity, ease: "easeInOut", repeatDelay: 0.4 }} />
         )}
         {STATIONS.map((name, i) => (
-          <span key={name} className="relative mx-auto flex h-6 w-6 items-center justify-center border border-foreground/70 bg-background" aria-hidden>
+          <span key={name} className="relative mx-auto flex h-6 w-6 items-center justify-center rounded-xl border bg-card shadow-sm" aria-hidden>
             {!reduce && (
               <motion.span className="absolute inset-0 bg-primary" initial={{ opacity: 0 }}
                 animate={{ opacity: [0, 1, 0] }}

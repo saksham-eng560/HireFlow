@@ -145,10 +145,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             const count = badgeFor(badge);
             return (
               <Link key={href} href={href} onClick={() => setMobileOpen(false)} aria-current={active ? "page" : undefined}
-                className={cn("group relative flex h-11 items-center gap-3 px-6 text-[12px] font-semibold uppercase tracking-[0.12em] transition-colors",
-                  active ? "text-primary-foreground" : "text-foreground/75 hover:bg-accent hover:text-foreground")}>
-                {/* The red highlight slides from the old item to the new one */}
-                {active && <motion.span layoutId="nav-active" aria-hidden className="absolute inset-0 bg-primary"
+                className={cn("group relative mx-3 flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors",
+                  active ? "text-primary-foreground" : "text-foreground/75 hover:bg-accent hover:text-accent-foreground")}>
+                {/* The blue highlight slides from the old item to the new one */}
+                {active && <motion.span layoutId="nav-active" aria-hidden className="absolute inset-0 rounded-lg bg-primary shadow-sm"
                   transition={{ type: "spring", stiffness: 520, damping: 42 }} />}
                 <Icon className="relative h-4 w-4 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5" />
                 <span className="relative flex-1 truncate">{label}</span>
@@ -173,8 +173,8 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         <span className="label-caps text-[10px]">Applied today</span>
         <span className="tabular-nums text-foreground">{status?.applied_today ?? 0} / {status?.daily_limit ?? "—"}</span>
       </div>
-      <div className="mt-2 h-1 bg-foreground/10">
-        <div className="h-full bg-primary transition-all"
+      <div className="mt-2 h-1 overflow-hidden rounded-full bg-primary/15">
+        <div className="h-full rounded-full bg-primary transition-all"
           style={{ width: `${Math.min(100, ((status?.applied_today ?? 0) / Math.max(1, status?.daily_limit ?? 1)) * 100)}%` }} />
       </div>
       <p className="mt-3 flex items-center gap-2">
@@ -185,7 +185,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="noise flex min-h-screen bg-background">
+    <div className="flex min-h-screen bg-background">
       <aside className="sticky top-0 hidden h-screen w-[248px] shrink-0 flex-col border-r border-line/60 lg:flex">
         <div className="flex h-16 items-center border-b border-line/60 px-6"><Logo href="/dashboard" /></div>
         {renderNav("desktop-nav")}
@@ -211,7 +211,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           <ScanIndicator run={status?.running_runs.find((r) => r.run_type === "scan") ?? null} />
           {!!status?.to_review && !pathname.startsWith("/dashboard/review") && (
             <Link href="/dashboard/review"
-              className="label-caps mr-2 hidden items-center gap-2 border border-primary px-3 py-1.5 text-[11px] text-primary transition-colors hover:bg-primary hover:text-primary-foreground md:inline-flex">
+              className="mr-2 hidden items-center gap-2 rounded-full border border-primary/40 bg-secondary px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary hover:text-primary-foreground md:inline-flex">
               <Layers className="h-3.5 w-3.5" /> {status.to_review} to swipe
             </Link>
           )}
@@ -223,8 +223,8 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 {isLoading ? <Skeleton className="h-4 w-28" /> : <p className="font-medium leading-tight">{me?.full_name}</p>}
                 <p className="text-xs text-muted-foreground">{me?.email}</p>
               </div>
-              <Avatar className="h-9 w-9 rounded-none border border-line">
-                <AvatarFallback className="rounded-none bg-primary text-xs font-bold text-primary-foreground">{initials(me?.full_name)}</AvatarFallback>
+              <Avatar className="h-9 w-9 border border-line">
+                <AvatarFallback className="bg-primary text-xs font-bold text-primary-foreground">{initials(me?.full_name)}</AvatarFallback>
               </Avatar>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
@@ -236,7 +236,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               <DropdownMenuItem onSelect={() => router.push("/dashboard/settings")}><Settings /> Settings</DropdownMenuItem>
               <DropdownMenuItem onSelect={() => router.push("/dashboard/resume")}><FileText /> Resume Lab</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={logout} className="text-primary focus:text-primary"><LogOut /> Sign out</DropdownMenuItem>
+              <DropdownMenuItem onSelect={logout}><LogOut /> Sign out</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </header>

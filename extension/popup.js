@@ -20,7 +20,7 @@ function setMessage(text, ok, id = "message") {
 }
 
 function showLogin(id, loggedIn) {
-  $(id).textContent = loggedIn ? "✓ logged in" : "not logged in";
+  $(id).textContent = loggedIn ? "logged in" : "not logged in";  // .ok / .err add the ✓ / ✕
   $(id).className = loggedIn ? "ok" : "err";
 }
 

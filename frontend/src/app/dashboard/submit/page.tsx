@@ -491,7 +491,7 @@ function SubmitInner() {
         <div className="mx-auto max-w-[880px]">
           <div className="mb-3 flex items-end justify-between gap-3">
             <p className="label-caps text-muted-foreground" aria-live="polite">
-              <span className="mr-1 font-display text-2xl leading-none text-foreground tabular-nums">{index + 1}</span> of {count}
+              <span className="mr-1 font-mono font-bold tracking-tight text-2xl leading-none text-foreground tabular-nums">{index + 1}</span> of {count}
             </p>
             {attention > 0 && !item.blocker && (
               <p className="label-caps flex items-center gap-1.5 text-[10px] text-warning">
@@ -502,7 +502,7 @@ function SubmitInner() {
 
           <AnimatePresence mode="wait" initial={false} custom={exit}>
             <motion.section key={item.id} custom={exit} variants={cardVariants} initial="enter" animate="center" exit="exit"
-              aria-label={`${job?.role_title} at ${job?.company_name}`} className="border border-foreground/70 bg-background">
+              aria-label={`${job?.role_title} at ${job?.company_name}`} className="rounded-xl border bg-card shadow-sm">
               <header className="flex flex-col gap-4 border-b border-line/60 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
                 <div className="min-w-0 flex-1">
                   <p className="label-caps text-[10px] text-muted-foreground">
@@ -527,7 +527,7 @@ function SubmitInner() {
                 </div>
                 <div className="flex items-start justify-between gap-4 sm:flex-col sm:items-end">
                   <div className="flex flex-col items-start sm:items-end">
-                    <span className={cn("font-display text-5xl leading-none tabular-nums", (item.match_score ?? 0) >= 70 ? "text-primary" : "text-foreground")}>
+                    <span className={cn("font-mono font-bold tracking-tight text-5xl leading-none tabular-nums", (item.match_score ?? 0) >= 70 ? "text-primary" : "text-foreground")}>
                       {item.match_score ?? "—"}
                     </span>
                     <span className="label-caps mt-1 text-[9px] text-muted-foreground">match</span>

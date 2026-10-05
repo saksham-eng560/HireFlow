@@ -71,20 +71,20 @@ export const SwipeCard = forwardRef<SwipeCardHandle, {
       onDragEnd={onDragEnd}
       style={{ x, y, rotate }}
       whileDrag={{ cursor: "grabbing" }}
-      className="absolute inset-0 flex cursor-grab touch-pan-y select-none flex-col overflow-hidden border border-foreground/70 bg-background shadow-2xl"
+      className="absolute inset-0 flex cursor-grab touch-pan-y select-none flex-col overflow-hidden rounded-2xl border bg-card shadow-xl"
       aria-label={`${job.role_title} at ${job.company_name}`}
     >
       {/* stamps */}
       <motion.span style={{ opacity: keepOpacity }}
-        className="pointer-events-none absolute left-6 top-24 z-10 -rotate-12 border-4 border-primary bg-background/80 px-4 py-1 font-display text-3xl text-primary">
+        className="pointer-events-none absolute left-6 top-24 z-10 -rotate-12 rounded-lg border-4 border-primary bg-background/80 px-4 py-1 font-display font-extrabold text-3xl text-primary">
         KEEP
       </motion.span>
       <motion.span style={{ opacity: appliedOpacity }}
-        className="pointer-events-none absolute left-1/2 top-24 z-10 -translate-x-1/2 border-4 border-success bg-background/80 px-4 py-1 font-display text-3xl text-success">
+        className="pointer-events-none absolute left-1/2 top-24 z-10 -translate-x-1/2 rounded-lg border-4 border-success bg-background/80 px-4 py-1 font-display font-extrabold text-3xl text-success">
         APPLIED
       </motion.span>
       <motion.span style={{ opacity: skipOpacity }}
-        className="pointer-events-none absolute right-6 top-24 z-10 rotate-12 border-4 border-foreground bg-background/80 px-4 py-1 font-display text-3xl text-foreground">
+        className="pointer-events-none absolute right-6 top-24 z-10 rotate-12 rounded-lg border-4 border-foreground bg-background/80 px-4 py-1 font-display font-extrabold text-3xl text-foreground">
         SKIP
       </motion.span>
 
@@ -107,7 +107,7 @@ export const SwipeCard = forwardRef<SwipeCardHandle, {
           </div>
         </div>
         <div className="flex shrink-0 flex-col items-end">
-          <span className={cn("font-display text-5xl leading-none tabular-nums", score != null && score >= 70 ? "text-primary" : "text-foreground")}>
+          <span className={cn("font-mono font-bold tracking-tight text-5xl leading-none tabular-nums", score != null && score >= 70 ? "text-primary" : "text-foreground")}>
             {score ?? "—"}
           </span>
           <span className="label-caps mt-1 text-[9px] text-muted-foreground">match</span>

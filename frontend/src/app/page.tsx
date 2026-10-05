@@ -23,7 +23,7 @@ const RULES = [
 
 export default function Landing() {
   return (
-    <main className="noise min-h-screen bg-background text-foreground">
+    <main className="min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-[1440px] border-x border-line/70">
         {/* ---------------------------------------------------------------- header */}
         <header className="flex h-20 items-center justify-between border-b border-line/70 px-5 sm:px-10">
@@ -81,7 +81,7 @@ export default function Landing() {
               ))}
             </div>
             <div>
-              <p className="font-display text-2xl">4,000+</p>
+              <p className="font-mono font-bold tracking-tight text-2xl">4,000+</p>
               <p className="text-sm text-muted-foreground">live internships, refreshed daily</p>
             </div>
           </div>
@@ -110,7 +110,7 @@ export default function Landing() {
             {STEPS.map((s, i) => (
               <div key={s.n} className={cn("group p-8 transition-colors hover:bg-card sm:p-10", i > 0 && "border-t border-line/70 sm:border-t-0",
                 i % 2 === 1 && "sm:border-l", i > 1 && "sm:border-t lg:border-t-0", i > 0 && "lg:border-l")}>
-                <p className="font-display text-5xl text-primary">{s.n}</p>
+                <p className="font-mono font-bold tracking-tight text-5xl text-primary">{s.n}</p>
                 <h3 className="label-caps mt-8 text-sm font-bold text-foreground">{s.title}</h3>
                 <p className="mt-3 leading-relaxed text-muted-foreground">{s.text}</p>
               </div>
@@ -154,12 +154,12 @@ export default function Landing() {
             <div className="relative h-[330px] w-[290px]">
               <div className="absolute inset-0 translate-x-5 translate-y-3 rotate-6 border border-line bg-background" />
               <div className="absolute inset-0 -translate-x-3 -rotate-3 border border-line bg-background" />
-              <div className="absolute inset-0 flex flex-col border border-foreground/70 bg-background p-6">
+              <div className="absolute inset-0 flex flex-col rounded-xl border bg-card shadow-sm p-6">
                 <div className="flex items-start justify-between">
                   <span className="label-caps text-muted-foreground">Ashby · Remote</span>
-                  <span className="font-display text-3xl text-primary">86</span>
+                  <span className="font-mono font-bold tracking-tight text-3xl text-primary">86</span>
                 </div>
-                <p className="mt-6 font-display text-xl uppercase leading-tight">Software Engineer Intern</p>
+                <p className="mt-6 font-display font-extrabold text-xl uppercase leading-tight">Software Engineer Intern</p>
                 <p className="mt-1 text-muted-foreground">Ramp · Summer 2027</p>
                 <div className="mt-5 flex flex-wrap gap-1.5">
                   {["Python", "React", "SQL", "Sponsors visas"].map((t) => (
@@ -171,7 +171,7 @@ export default function Landing() {
                   <span className="flex h-11 items-center justify-center gap-1 bg-primary text-xs font-bold uppercase tracking-wider text-primary-foreground"><Check className="h-4 w-4" /> Keep</span>
                 </div>
               </div>
-              <span className="absolute -left-10 top-1/2 -rotate-12 border-2 border-primary bg-background px-3 py-1 font-display text-lg text-primary">KEEP</span>
+              <span className="absolute -left-10 top-1/2 -rotate-12 border-2 border-primary bg-background px-3 py-1 font-display font-extrabold text-lg text-primary">KEEP</span>
             </div>
           </div>
         </section>

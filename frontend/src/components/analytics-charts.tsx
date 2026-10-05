@@ -11,11 +11,16 @@ import type { ApplicationStatus } from "@/lib/types";
 
 const AXIS = { stroke: "var(--chart-axis)", tick: { fill: "var(--chart-muted)", fontSize: 12 }, tickLine: false };
 
+/** All three series are blues, so "Responses" is also dashed: the lines never differ by colour alone. */
 const SERIES = [
-  { key: "discovered", label: "Discovered", color: "var(--series-1)" },
-  { key: "applied", label: "Applied", color: "var(--series-2)" },
-  { key: "responses", label: "Responses", color: "var(--series-3)" },
+  { key: "discovered", label: "Discovered", color: "var(--series-1)", dash: undefined },
+  { key: "applied", label: "Applied", color: "var(--series-2)", dash: undefined },
+  { key: "responses", label: "Responses", color: "var(--series-3)", dash: "6 4" },
 ] as const;
+
+function legendKey(s: (typeof SERIES)[number]): React.CSSProperties {
+  return s.dash ? { borderTop: `2px dashed ${s.color}` } : { background: s.color };
+}
 
 function shortDate(value: string) {
   return new Date(`${value}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" });
@@ -27,7 +32,7 @@ function LineLegend() {
     <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
       {SERIES.map((s) => (
         <span key={s.key} className="inline-flex items-center gap-1.5">
-          <span className="h-0.5 w-4 rounded-full" style={{ background: s.color }} />
+          <span className="h-0.5 w-4 rounded-full" style={legendKey(s)} />
           {s.label}
         </span>
       ))}
@@ -44,7 +49,7 @@ function TimelineTooltip({ active, payload, label }: TooltipProps<number, string
         const item = payload.find((p) => p.dataKey === s.key);
         return (
           <div key={s.key} className="flex items-center gap-2">
-            <span className="h-0.5 w-3 rounded-full" style={{ background: s.color }} />
+            <span className="h-0.5 w-3 rounded-full" style={legendKey(s)} />
             <span className="font-semibold tabular-nums text-foreground">{item?.value ?? 0}</span>
             <span className="text-muted-foreground">{s.label}</span>
           </div>
@@ -86,7 +91,7 @@ export function TimelineChart({ data, height = 260 }: { data: Overview["timeline
             <YAxis allowDecimals={false} {...AXIS} axisLine={false} width={48} />
             <Tooltip content={<TimelineTooltip />} cursor={{ stroke: "var(--chart-axis)", strokeWidth: 1 }} />
             {SERIES.map((s) => (
-              <Line key={s.key} type="linear" dataKey={s.key} name={s.label} stroke={s.color} strokeWidth={2}
+              <Line key={s.key} type="linear" dataKey={s.key} name={s.label} stroke={s.color} strokeWidth={2} strokeDasharray={s.dash}
                 strokeLinecap="round" strokeLinejoin="round" dot={false}
                 activeDot={{ r: 4, fill: s.color, stroke: "hsl(var(--card))", strokeWidth: 2 }} />
             ))}
@@ -116,7 +121,7 @@ export function MatchHistogram({ data, height = 220 }: { data: Overview["match_d
         <XAxis dataKey="range" {...AXIS} interval={0} fontSize={11} />
         <YAxis allowDecimals={false} {...AXIS} axisLine={false} width={48} />
         <Tooltip content={<CountTooltip />} cursor={{ fill: "hsl(var(--muted))" }} />
-        <Bar dataKey="count" fill="var(--series-1)" maxBarSize={24} radius={[0, 0, 0, 0]} />
+        <Bar dataKey="count" fill="var(--series-1)" maxBarSize={24} radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -138,7 +143,7 @@ export function StatusBreakdown({ byStatus }: { byStatus: Record<string, number>
         <li key={r.status} className="grid grid-cols-[8rem_1fr] items-center gap-3 text-sm" title={`${STATUS_LABELS[r.status]}: ${r.count}`}>
           <span className="truncate text-muted-foreground">{STATUS_LABELS[r.status]}</span>
           <div className="flex items-center gap-2">
-            <div className="h-3" style={{ width: `${(r.count / max) * 85}%`, minWidth: 4, background: "var(--series-1)" }} />
+            <div className="h-3 rounded-full" style={{ width: `${(r.count / max) * 85}%`, minWidth: 4, background: "var(--series-2)" }} />
             <span className="tabular-nums text-xs font-medium">{r.count}</span>
           </div>
         </li>
@@ -160,7 +165,7 @@ export function StatTile({ label, value, hint, className, icon }: {
         <span className="label-caps text-[10px]">{label}</span>
         {icon}
       </div>
-      <p className="mt-4 font-display text-4xl leading-none"><MaybeAnimatedNumber value={value} /></p>
+      <p className="mt-4 font-mono font-bold tracking-tight text-4xl leading-none"><MaybeAnimatedNumber value={value} /></p>
       {hint && <p className="mt-3 text-xs text-muted-foreground">{hint}</p>}
     </div>
   );

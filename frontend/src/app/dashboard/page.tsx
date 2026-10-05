@@ -50,7 +50,7 @@ function Onboarding() {
           <CardTitle>Get your agent ready</CardTitle>
           <CardDescription className="mt-2">{completed} of {steps.length} done — kept jobs only auto-submit once your eligibility answers are saved.</CardDescription>
         </div>
-        <span className="font-display text-3xl tabular-nums text-primary">{Math.round((completed / steps.length) * 100)}%</span>
+        <span className="font-mono font-bold tracking-tight text-3xl tabular-nums text-primary">{Math.round((completed / steps.length) * 100)}%</span>
       </CardHeader>
       <div className="px-5"><Progress value={(completed / steps.length) * 100} /></div>
       <CardContent className="mt-4 grid gap-px bg-border p-0 sm:grid-cols-2 sm:[&>:last-child]:col-span-2 xl:grid-cols-5 xl:[&>:last-child]:col-span-1">

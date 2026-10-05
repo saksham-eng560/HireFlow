@@ -52,9 +52,9 @@ export function ScanBar({ percent, active, className }: { percent: number; activ
   const reduce = useReducedMotion();
   const value = Math.max(2, Math.min(100, percent));
   return (
-    <div className={cn("relative h-2 w-full overflow-hidden bg-primary/15", className)} role="progressbar"
+    <div className={cn("relative h-2 w-full overflow-hidden rounded-full bg-primary/15", className)} role="progressbar"
       aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(percent)} aria-label="Scan progress">
-      <motion.div className="absolute inset-y-0 left-0 overflow-hidden bg-primary"
+      <motion.div className="absolute inset-y-0 left-0 overflow-hidden rounded-full bg-primary"
         initial={false} animate={{ width: `${value}%` }}
         transition={reduce ? { duration: 0 } : { type: "spring", stiffness: 90, damping: 22 }}>
         {active && !reduce && (
@@ -102,7 +102,7 @@ function Counter({ label, value, of }: { label: string; value: number; of?: numb
   return (
     <div className="min-w-0">
       <p className="label-caps truncate text-[10px] text-muted-foreground">{label}</p>
-      <p className="mt-1 font-display text-2xl leading-none">
+      <p className="mt-1 font-mono text-2xl font-bold leading-none tracking-tight tabular-nums">
         <AnimatedNumber value={value} duration={0.5} />
         {of != null && <span className="text-base text-muted-foreground"> / {of.toLocaleString()}</span>}
       </p>
@@ -124,7 +124,7 @@ function Running({ run, progress, scan }: { run: AgentRun; progress: ScanProgres
             <span className="h-2 w-2 animate-pulse-dot bg-primary" aria-hidden /> Scanning · {clock(elapsed)}{eta ? ` · ${eta}` : ""}
           </p>
           <p className="mt-3 flex items-baseline gap-4">
-            <span className="font-display text-5xl leading-none tabular-nums sm:text-6xl">
+            <span className="font-mono font-bold tracking-tight text-5xl leading-none tabular-nums sm:text-6xl">
               <AnimatedNumber value={percent} duration={0.6} className="tabular-nums" />%
             </span>
             <span className="min-w-0 text-sm text-muted-foreground" aria-live="polite">{progress?.message || "Starting the scan…"}</span>
@@ -207,7 +207,7 @@ export function ScanProgressPanel({ scan, className }: { scan: Scan; className?:
         <motion.section key="scan-panel" aria-label="Scan progress"
           initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
           transition={{ duration: 0.35, ease: EASE_OUT }} className={cn("overflow-hidden", className)}>
-          <div className="mb-8 border border-foreground/70 bg-card p-5 sm:p-6">
+          <div className="mb-8 rounded-xl border bg-card shadow-sm p-5 sm:p-6">
             {scan.running ? <Running run={scan.running} progress={scan.progress} scan={scan} />
               : scan.finished && <Finished run={scan.finished} onDismiss={scan.dismissFinished} />}
           </div>

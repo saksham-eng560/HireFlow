@@ -40,7 +40,7 @@ function StatCell({ label, value, accent }: { label: string; value: number | str
   return (
     <div className="px-4 py-4 sm:px-5">
       <p className="label-caps text-[10px] text-muted-foreground">{label}</p>
-      <p className={cn("mt-2 font-display text-3xl leading-none tabular-nums", accent && "text-primary")}>
+      <p className={cn("mt-2 font-mono font-bold tracking-tight text-3xl leading-none tabular-nums", accent && "text-primary")}>
         {typeof value === "number" ? <AnimatedNumber value={value} /> : value}
       </p>
     </div>
@@ -319,7 +319,7 @@ export default function SwipeReviewPage() {
               <div>
                 <div className="mb-3 flex items-baseline justify-between">
                   <span className="label-caps text-[10px] text-muted-foreground">Minimum score</span>
-                  <span className="font-display text-2xl tabular-nums">{bulkScore}</span>
+                  <span className="font-mono font-bold tracking-tight text-2xl tabular-nums">{bulkScore}</span>
                 </div>
                 <Slider value={[bulkScore]} min={0} max={100} step={5} onValueChange={(v) => setBulkScore(v[0])}
                   onValueCommit={(v) => setBulkPreviewScore(v[0])} aria-label="Minimum match score" />

@@ -98,6 +98,8 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
+      - name: Colour contrast (WCAG AA)
+        run: python3 ../scripts/check_contrast.py
       - run: npm run build
         env:
           BACKEND_URL: http://localhost:8000

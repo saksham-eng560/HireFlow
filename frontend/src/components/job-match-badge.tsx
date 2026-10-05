@@ -12,7 +12,7 @@ export function scoreTone(score: number | null | undefined) {
 export function JobMatchBadge({ score, size = "md" }: { score: number | null | undefined; size?: "sm" | "md" | "lg" }) {
   const dims = { sm: "h-8 w-8 text-xs", md: "h-11 w-11 text-sm", lg: "h-16 w-16 text-2xl" }[size];
   return (
-    <div className={cn("flex shrink-0 items-center justify-center border font-display tabular-nums", dims, scoreTone(score))}
+    <div className={cn("flex shrink-0 items-center justify-center rounded-lg border font-mono font-bold tracking-tight tabular-nums", dims, scoreTone(score))}
       title={score == null ? "Not evaluated yet" : `Match score ${score}/100`} aria-label={score == null ? "Not scored" : `Match score ${score}`}>
       {score ?? "—"}
     </div>

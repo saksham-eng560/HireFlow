@@ -53,7 +53,7 @@ function JobRow({ job, onChanged }: { job: Job; onChanged: () => void }) {
           <CompanyBadge company={job.company_name} check={job.company} />
           <YearFitTag label={job.year_fit} />
         </p>
-        <p className="mt-1 break-words font-display text-lg leading-tight">{job.role_title}</p>
+        <p className="mt-1 break-words font-display font-extrabold text-lg leading-tight">{job.role_title}</p>
         <p className="mt-1 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
           {job.location && <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" />{job.location}</span>}
           {job.is_remote && !/remote/i.test(job.location || "") && <span>Remote</span>}
@@ -117,7 +117,7 @@ export default function TopCompaniesPage() {
         </div>
       </div>
 
-      <div className="mt-6 border border-foreground/70 bg-background">
+      <div className="mt-6 rounded-xl border bg-card shadow-sm">
         {isLoading ? (
           <div className="space-y-2 p-4"><Skeleton className="h-16" /><Skeleton className="h-16" /><Skeleton className="h-16" /></div>
         ) : data && data.items.length ? (

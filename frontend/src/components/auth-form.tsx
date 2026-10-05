@@ -50,7 +50,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
   };
 
   return (
-    <main className="noise grid min-h-screen bg-background lg:grid-cols-[1.1fr_1fr]">
+    <main className="grid min-h-screen bg-background lg:grid-cols-[1.1fr_1fr]">
       <section className="relative hidden flex-col justify-between overflow-hidden border-r border-line/60 p-10 lg:flex">
         <TunnelGrid className="absolute inset-0 opacity-60" />
         <Logo className="relative" />

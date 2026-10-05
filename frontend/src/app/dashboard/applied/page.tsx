@@ -68,7 +68,7 @@ function StageTile({ label, value, total, index }: { label: string; value: numbe
         <span className="text-xs font-medium">{label}</span>
         <span className="font-mono text-[10px]">0{index + 1}</span>
       </div>
-      <p className="mt-4 font-display text-4xl leading-none"><AnimatedNumber value={value} /></p>
+      <p className="mt-4 font-mono font-bold tracking-tight text-4xl leading-none"><AnimatedNumber value={value} /></p>
       <div className="mt-4" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={share} aria-label={`${label}: ${share}% of your applications`}>
         <div className="h-1.5 bg-primary/15">
           <motion.div className="h-full origin-left bg-primary" initial={reduce ? false : { scaleX: 0 }} animate={{ scaleX: share / 100 }}
