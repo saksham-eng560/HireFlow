@@ -7,7 +7,7 @@ submitter, prompt, script and setting in the application. It also serves as the 
 verify the migration (see [Migration verification](#migration-verification) at the end).
 
 The migration is a rebrand. The stack (FastAPI · PostgreSQL 16 + pgvector / SQLite · SQLAlchemy 2.0 ·
-JWT · Celery + Redis · Next.js 14 · Playwright · Docker · Caddy · GitHub Actions) and the code are
+JWT · Celery + Redis · Next.js 15 · Playwright · Docker · Caddy · GitHub Actions) and the code are
 unchanged. Every file was carried over and only the naming references below were changed, with one
 deliberate exception: the Alembic history was squashed (see Section 15).
 
@@ -3129,7 +3129,7 @@ Targeted validations that do exist:
 
 ## Section 5: Complete Frontend Route Registry
 
-All paths are relative to `frontend/`. Framework: Next.js `14.2.35` App Router, React 18, TypeScript (strict), Tailwind 3 + shadcn/ui ("new-york" style), SWR 2, Framer Motion, Recharts, sonner. Path alias `@/*` → `./src/*`.
+All paths are relative to `frontend/`. Framework: Next.js `15.5` App Router, React 19, TypeScript (strict), Tailwind 3 + shadcn/ui ("new-york" style), SWR 2, Framer Motion, Recharts, sonner. Path alias `@/*` → `./src/*`.
 
 Every API path below is relative to the API client base `"/api/v1"` (see Section 6, `lib/api-client.ts`) unless written as a full `/api/v1/...` browser link. "LIVE" = SWR options `{ refreshInterval: 15000, revalidateOnFocus: true }`.
 

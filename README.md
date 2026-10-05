@@ -845,7 +845,7 @@ backend/
     worker/         Celery app, beat schedule and tasks
   alembic/          migrations (pgvector, enums, indexes)
   tests/            unit, API, scraper-fixture and browser end-to-end tests
-frontend/           Next.js 14 dashboard (app router, Tailwind, shadcn/ui + Radix, framer-motion, SWR, Recharts, PWA)
+frontend/           Next.js 15 dashboard (app router, Tailwind, shadcn/ui + Radix, framer-motion, SWR, Recharts, PWA)
 extension/          Chrome MV3 extension (LinkedIn and Internshala session sync)
 prompts/            all LLM prompts as editable text files
 scripts/            demo careers site, migrations, seed data, scraper CLI, local scheduler
