@@ -687,6 +687,21 @@ Simplest possible setup, with no Postgres or Redis: set `DATABASE_URL=sqlite:///
 `CELERY_TASK_ALWAYS_EAGER=true` and `REDIS_URL=` in `.env`, then run `make api` and `make web`.
 Scheduled scans need beat and Redis.
 
+### Coming from AutoApply AI
+
+HireFlow was previously called AutoApply AI. The database name changed with it: `hireflow` (user,
+password and database) in Docker, and `backend/data/hireflow.db` for `./start.sh`. A fresh install
+starts empty. To keep your old data:
+
+- **Local SQLite** (`./start.sh`): copy `backend/data/autoapply.db` to `backend/data/hireflow.db`.
+- **PostgreSQL**: point `DATABASE_URL` at your old database and run `cd backend && alembic stamp --purge 0001`
+  once. The six old migrations are now one revision, so this marks the existing schema as current.
+- Either way, keep the same `SECRET_KEY` / `ENCRYPTION_KEY` so stored tokens stay readable. Everyone
+  signs in once more, because the session cookie is now `hireflow_session`.
+- Applications you logged by hand without a link have a placeholder URL with the old name. To fix them,
+  run `UPDATE jobs SET source_url = replace(source_url, 'https://manual.autoapply.invalid/', 'https://manual.hireflow.invalid/') WHERE source_url LIKE 'https://manual.autoapply.invalid/%';`
+- Reload the unpacked Chrome extension from the `extension/` folder.
+
 Other useful commands:
 
 ```bash

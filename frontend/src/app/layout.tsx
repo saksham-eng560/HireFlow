@@ -13,7 +13,7 @@ const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono", displ
 
 export const metadata: Metadata = {
   title: { default: "HireFlow", template: "%s · HireFlow" },
-  description: "Swipe right on internships — your agent tailors, fills and applies.",
+  description: "Your internship search, on autopilot, with you in control. HireFlow finds internships, lets you swipe on each one, then tailors, fills and applies for the ones you keep.",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [{ url: "/icon.svg", type: "image/svg+xml" }, { url: "/favicon.ico", sizes: "any" }],

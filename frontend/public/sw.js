@@ -1,5 +1,5 @@
 /* HireFlow service worker: offline shell + notification clicks (PWA). */
-const CACHE = "hireflow-shell-v2";
+const CACHE = "hireflow-shell-v3";
 const SHELL = ["/dashboard", "/icon.svg", "/icon-192.png", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {

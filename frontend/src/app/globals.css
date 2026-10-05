@@ -36,6 +36,10 @@
     --ring: 356 75% 48%;
     --radius: 0rem;
     --noise-opacity: 0.05;
+    /* Brand mark colours: the same in light and dark mode */
+    --brand: 221 83% 53%;
+    --brand-foreground: 0 0% 100%;
+    --brand-soft: 213 97% 87%;
     /* Chart tokens */
     --series-1: #2b2727;
     --series-2: #d52b37;
