@@ -29,7 +29,7 @@ from app.services import intern_level
 from app.services.ai_setup import PullError, connection_test, llm_section, pull_progress, start_pull
 from app.services.google_oauth import has_scope
 from app.services.location_focus import get_season
-from app.services.presets import apply_preset
+from app.services.presets import apply_preset, clamp_daily_cap
 from app.services.privacy import delete_user_data, export_user_data
 from app.services.progress import send_now as send_progress_now
 from app.services.question_answerer import STANDARD_FIELDS
@@ -119,18 +119,15 @@ def _validate_internshala(prefs: dict) -> None:  # type: ignore[type-arg]
         raise HTTPException(422, "trusted_companies must be a list of company names")
 
 
-@router.put("/preferences")
-def update_preferences(body: PreferencesUpdate, user: CurrentUser, db: DB) -> dict:
-    unknown = set(body.preferences) - ALLOWED_PREF_KEYS
-    if unknown:
-        raise HTTPException(422, f"Unknown preference keys: {sorted(unknown)}")
-    prefs = merge_preferences(user.preferences, body.preferences)
+def validate_preferences(prefs: dict) -> None:  # type: ignore[type-arg]
+    """Checks every merged preference set before it is saved (Settings and onboarding)."""
     threshold = prefs.get("auto_apply_threshold")
     if not isinstance(threshold, int) or not 0 <= threshold <= 100:
         raise HTTPException(422, "auto_apply_threshold must be 0-100")
     max_daily = prefs.get("max_applications_per_day")
-    if not isinstance(max_daily, int) or not 1 <= max_daily <= 200:
-        raise HTTPException(422, "max_applications_per_day must be 1-200")
+    ceiling = settings.MAX_APPLICATIONS_PER_DAY_CEILING
+    if not isinstance(max_daily, int) or isinstance(max_daily, bool) or not 1 <= max_daily <= ceiling:
+        raise HTTPException(422, f"max_applications_per_day must be 1-{ceiling}")
     if prefs.get("review_mode") not in ("swipe", "auto"):
         raise HTTPException(422, "review_mode must be 'swipe' or 'auto'")
     if prefs.get("resume_strategy") not in ("original", "light", "full"):
@@ -145,6 +142,17 @@ def update_preferences(body: PreferencesUpdate, user: CurrentUser, db: DB) -> di
         raise HTTPException(422, "notification_popups must be true or false")
     _validate_focus(prefs)
     _validate_internshala(prefs)
+
+
+@router.put("/preferences")
+def update_preferences(body: PreferencesUpdate, user: CurrentUser, db: DB) -> dict:
+    unknown = set(body.preferences) - ALLOWED_PREF_KEYS
+    if unknown:
+        raise HTTPException(422, f"Unknown preference keys: {sorted(unknown)}")
+    prefs = merge_preferences(user.preferences, body.preferences)
+    if "max_applications_per_day" not in body.preferences:
+        prefs = clamp_daily_cap(prefs)  # a cap saved before the ceiling existed doesn't block other changes
+    validate_preferences(prefs)
     turned_on = prefs["internshala_bot_enabled"] and not user.prefs.get("internshala_bot_enabled")
     if turned_on:
         consents = dict(user.consents or {})

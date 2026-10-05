@@ -88,6 +88,12 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => undefined);
   }, []);
 
+  // First run: finish onboarding before the dashboard (people who were here before onboarding are marked done)
+  const needsOnboarding = !!me && !me.onboarding_completed_at;
+  useEffect(() => {
+    if (needsOnboarding) router.replace("/onboarding");
+  }, [needsOnboarding, router]);
+
   const live = useWebSocket((event) => {
     if (event.type === "notification") {
       const d = event.data as { title?: string; body?: string; event_type?: string; link?: string };
@@ -183,6 +189,8 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       </p>
     </div>
   );
+
+  if (needsOnboarding) return <div className="min-h-screen bg-background" aria-busy="true" />;
 
   return (
     <div className="flex min-h-screen bg-background">

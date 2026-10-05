@@ -6,12 +6,14 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from app.api.deps import DB, CurrentUser, parse_uuid
 from app.api.serializers import run_out
 from app.models.agent_run import AgentRun
 from app.models.application import Application
 from app.models.enums import ApplicationStatus
+from app.models.user import User
 from app.schemas.agent import StartScanRequest
 from app.scrapers import SCRAPERS
 from app.services import agent_orchestrator as orch
@@ -23,23 +25,31 @@ from app.worker.dispatch import enqueue
 router = APIRouter(prefix="/agent", tags=["agent"])
 
 
-@router.post("/start-scan", status_code=202)
-def start_scan(body: StartScanRequest, user: CurrentUser, db: DB) -> dict:
-    platforms = orch.scan_platforms(user.prefs, body.platforms)  # your sources, plus the top companies
+def running_scan(db: Session, user: User) -> AgentRun | None:
+    return db.scalar(select(AgentRun).where(AgentRun.user_id == user.id, AgentRun.run_type == "scan",
+                                            AgentRun.status == "running",
+                                            AgentRun.started_at > datetime.now(UTC) - timedelta(hours=1)))
+
+
+def queue_scan(db: Session, user: User, requested: list[str] | None = None) -> AgentRun:
+    """Start a scan of your sources (also used by onboarding's "Run my first scan")."""
+    platforms = orch.scan_platforms(user.prefs, requested)  # your sources, plus the top companies
     unknown = [p for p in platforms if p not in SCRAPERS]
     if unknown:
         raise HTTPException(422, f"Unknown platforms: {unknown}")
-    running = db.scalar(select(AgentRun).where(AgentRun.user_id == user.id, AgentRun.run_type == "scan",
-                                               AgentRun.status == "running",
-                                               AgentRun.started_at > datetime.now(UTC) - timedelta(hours=1)))
-    if running:
+    if running_scan(db, user):
         raise HTTPException(status.HTTP_409_CONFLICT, "A scan is already running")
     run = AgentRun(user_id=user.id, run_type="scan", trigger="user", status="running",
                    log=[{"ts": datetime.now(UTC).isoformat(), "level": "info", "message": "Scan queued"}])
     db.add(run)
     db.flush()
     enqueue("scan_user", str(user.id), "user", platforms, str(run.id), after_commit=db)
-    return run_out(run, include_log=True)
+    return run
+
+
+@router.post("/start-scan", status_code=202)
+def start_scan(body: StartScanRequest, user: CurrentUser, db: DB) -> dict:
+    return run_out(queue_scan(db, user, body.platforms), include_log=True)
 
 
 @router.get("/status")

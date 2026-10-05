@@ -591,8 +591,9 @@ def _setup(email: str = "jane@example.com", *, bot: bool = True, session: bool =
     url = url or f"https://internshala.com/internship/detail/python-{uuid.uuid4().hex[:8]}"
     with SessionLocal() as db:
         user = db.query(User).filter(User.email == email).one()
+        # "auto_submit_kept": these tests were written when Submit automatically was on by default (now off for new users)
         user.preferences = {**(user.preferences or {}), "internshala_bot_enabled": bot, "internshala_auto_submit": auto_submit,
-                            "internshala_daily_limit": limit}
+                            "internshala_daily_limit": limit, "auto_submit_kept": True}
         user.internshala_session = SESSION if session else None
         user.internshala_session_valid = valid
         user.linkedin_session_valid = True

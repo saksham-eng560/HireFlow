@@ -216,6 +216,7 @@ def _add_missing_sqlite_columns() -> None:
     from sqlalchemy import inspect
 
     inspector = inspect(engine)
+    added: set[tuple[str, str]] = set()
     with engine.begin() as conn:
         for table in Base.metadata.sorted_tables:
             existing = {col["name"] for col in inspector.get_columns(table.name)}
@@ -228,4 +229,16 @@ def _add_missing_sqlite_columns() -> None:
                     default_sql = default.compile(dialect=engine.dialect) if hasattr(default, "compile") else f"'{default}'"
                     ddl += f" NOT NULL DEFAULT {default_sql}" if not column.nullable else f" DEFAULT {default_sql}"
                 conn.execute(text(ddl))
+                added.add((table.name, column.name))
                 logger.info("Added column %s.%s", table.name, column.name)
+        for (table_name, column_name), statement in _SQLITE_BACKFILLS.items():
+            if (table_name, column_name) in added:
+                conn.execute(text(statement))
+
+
+# Data to fill in when a column is added to an existing local database (mirrors the Alembic migrations).
+_SQLITE_BACKFILLS: dict[tuple[str, str], str] = {
+    # People who were already using HireFlow skip the first-run onboarding (migration 0002).
+    ("users", "onboarding_completed_at"): "UPDATE users SET onboarding_completed_at = created_at, onboarding_step = 8 "
+                                         "WHERE onboarding_completed_at IS NULL",
+}

@@ -6,11 +6,13 @@ import uuid
 
 from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile, status
 from sqlalchemy import select, update
+from sqlalchemy.orm import Session
 
 from app.api.deps import DB, CurrentUser, parse_uuid
 from app.api.serializers import resume_out
 from app.core.storage import get_storage, user_prefix
 from app.models.resume import Resume
+from app.models.user import User
 from app.schemas.resume import ResumeCreateFromText, ResumeUpdate
 from app.schemas.resume_content import ResumeContent, normalize_resume
 from app.services.embeddings import embed_text
@@ -46,6 +48,10 @@ def _sync_profile(user, content: dict) -> None:  # type: ignore[no-untyped-def]
         user.location = info["location"]
     if info.get("linkedin") and not user.linkedin_url:
         user.linkedin_url = info["linkedin"]
+    if info.get("github") and not user.github_url:
+        user.github_url = info["github"]
+    if info.get("portfolio") and not user.portfolio_url:
+        user.portfolio_url = info["portfolio"]
 
 
 @router.post("/upload", status_code=201)
@@ -82,20 +88,27 @@ async def upload_resume(user: CurrentUser, db: DB, file: UploadFile = File(...),
     return {**resume_out(resume), "parse_method": method}
 
 
-@router.post("/from-text", status_code=201)
-def create_from_text(body: ResumeCreateFromText, user: CurrentUser, db: DB) -> dict:
-    parsed, method = parse_resume_text(body.text)
+def create_resume_from_text(db: Session, user: User, text: str, label: str | None = None,
+                            is_master: bool = True) -> tuple[Resume, str]:
+    """Parse pasted resume text into a resume (the master one by default). Returns it and the parse method."""
+    parsed, method = parse_resume_text(text)
     if not parsed["personal_info"].get("email"):
         parsed["personal_info"]["email"] = user.email
     if not parsed["personal_info"].get("name"):
         parsed["personal_info"]["name"] = user.full_name
-    resume = Resume(user_id=user.id, label=body.label or "Master resume", raw_text=body.text, parsed_content=parsed)
+    resume = Resume(user_id=user.id, label=label or "Master resume", raw_text=text, parsed_content=parsed)
     db.add(resume)
     db.flush()
     _embed(resume)
-    if body.is_master:
+    if is_master:
         _make_master(db, user.id, resume)
     _sync_profile(user, parsed)
+    return resume, method
+
+
+@router.post("/from-text", status_code=201)
+def create_from_text(body: ResumeCreateFromText, user: CurrentUser, db: DB) -> dict:
+    resume, method = create_resume_from_text(db, user, body.text, body.label, body.is_master)
     return {**resume_out(resume), "parse_method": method}
 
 

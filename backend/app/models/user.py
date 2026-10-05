@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Boolean, ForeignKey, String, Text, UniqueConstraint, Uuid, false
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid, false, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base, JSONType, UTCDateTime, utcnow
@@ -28,7 +28,7 @@ DEFAULT_PREFERENCES: dict[str, Any] = {
     "company_size_preference": [],
     "companies_to_avoid": [],
     "companies_to_target": [],
-    "max_applications_per_day": 25,
+    "max_applications_per_day": 10,  # new users start low; the server never allows more than MAX_APPLICATIONS_PER_DAY_CEILING
     "auto_apply_threshold": 80,
     "job_types": ["internship"],  # internships only for now; add "full-time" to widen
     # --- Intern level (services/intern_level.py) ---
@@ -65,7 +65,7 @@ DEFAULT_PREFERENCES: dict[str, Any] = {
     # "auto":  the original behaviour: jobs under auto_apply_threshold are skipped, the rest prepared.
     "review_mode": "swipe",
     "resume_strategy": "original",  # original (your file, untouched) | light (reorder only) | full (AI rewrite)
-    "auto_submit_kept": True,       # kept jobs are submitted once filled, unless a question needs you
+    "auto_submit_kept": False,      # on: kept jobs are submitted once filled, unless a question needs you (off for new users)
     "trust_generated_answers": True,  # AI-written open-ended answers don't hold a kept job back
     "auto_keep_min_score": None,    # optionally keep jobs scoring at least this without swiping
     "max_jobs_per_source": None,    # None = server default (MAX_JOBS_PER_SOURCE)
@@ -122,6 +122,15 @@ class User(Base):
     linkedin_url: Mapped[str | None] = mapped_column(Text)
     location: Mapped[str | None] = mapped_column(String(255))
     hashed_password: Mapped[str | None] = mapped_column(String(255))
+
+    # Profile links (onboarding step 3); form filling uses them for GitHub / portfolio / website questions
+    github_url: Mapped[str | None] = mapped_column(Text)
+    portfolio_url: Mapped[str | None] = mapped_column(Text)
+    profile_links: Mapped[list[dict[str, str]] | None] = mapped_column(JSONType)  # [{"label": "LeetCode", "url": ...}]
+
+    # First-run onboarding (/onboarding): the step you're on, and when you finished it (None = not yet)
+    onboarding_step: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
+    onboarding_completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
     # OAuth tokens (AES-256-GCM encrypted at rest)
     google_access_token: Mapped[str | None] = mapped_column(EncryptedText)

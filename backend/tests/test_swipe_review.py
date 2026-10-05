@@ -85,7 +85,8 @@ def test_internship_preset() -> None:
                           "sources": {"greenhouse_boards": ["mycompany"]}}, "internships")
     assert prefs["target_roles"] == ["Software Engineer Intern", "ML Intern"]
     assert prefs["job_types"] == ["internship"] and prefs["review_mode"] == "swipe"
-    assert prefs["max_applications_per_day"] == 100 and prefs["max_jobs_per_source"] == 300
+    # Mass apply goes up to the server ceiling (MAX_APPLICATIONS_PER_DAY_CEILING, 25), never past it
+    assert prefs["max_applications_per_day"] == 25 and prefs["max_jobs_per_source"] == 300
     assert prefs["sources"]["greenhouse_boards"][0] == "mycompany" and "anthropic" in prefs["sources"]["greenhouse_boards"]
     assert set(STARTUP_ASHBY) <= set(prefs["sources"]["ashby_boards"])
     assert "internships" in prefs["platforms"] and "wellfound" in prefs["platforms"]
@@ -132,7 +133,8 @@ def test_review_queue_decisions(auth_client: TestClient, master_resume: dict, mo
 
     deck = auth_client.get("/api/v1/review/queue").json()
     assert [c["match_score"] for c in deck["items"]] == [85, 70, 55, 40]  # best first
-    assert deck["stats"]["remaining"] == 4 and deck["settings"]["auto_submit_kept"] is True
+    # New users start with "Submit automatically" off: they see their first filled forms before anything is sent
+    assert deck["stats"]["remaining"] == 4 and deck["settings"]["auto_submit_kept"] is False
     assert deck["items"][0]["heads_up"] == ["Not a remote role"] and deck["has_master_resume"]
     assert auth_client.get("/api/v1/review/queue?min_score=60").json()["stats"]["remaining"] == 4
     assert auth_client.get("/api/v1/review/queue?min_score=60").json()["matching"] == 2
@@ -218,6 +220,8 @@ def test_undo_skip_only_while_skipped(auth_client: TestClient, master_resume: di
 
 def test_stale_prepare_tasks_never_submit_twice(auth_client: TestClient, master_resume: dict, monkeypatch) -> None:
     queued = _capture_enqueue(monkeypatch)
+    # Submit automatically is off for new users: turn it on, it's what this test is about
+    auth_client.put("/api/v1/users/me/preferences", json={"preferences": {"auto_submit_kept": True}})
     first, second = _seed_queue(auth_client.get("/api/v1/auth/me").json()["email"], 2)
     # keep -> undo -> keep before the worker picks anything up: two prepare tasks for one job
     assert auth_client.post(f"/api/v1/review/{first}", json={"decision": "keep"}).status_code == 200
@@ -358,7 +362,7 @@ def test_no_write_lock_held_through_llm_calls(auth_client: TestClient, master_re
         company_name="Board 0", role_title="Software Engineer Intern", description="Full description. " * 60,
         source_url=url, source_platform=ATSPlatform.GREENHOUSE))
     auth_client.put("/api/v1/users/me/preferences", json={"preferences": {"target_roles": ["Software Engineer"],
-                                                                          "resume_strategy": "full"}})
+                                                                          "resume_strategy": "full", "auto_submit_kept": True}})
     _scan(auth_client.get("/api/v1/auth/me").json()["email"])
     assert [p for p in probes if p[0] == "evaluate_match"] == [("evaluate_match", True)] * 3
 

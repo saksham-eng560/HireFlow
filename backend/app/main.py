@@ -14,7 +14,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy import text
 
-from app.api import agent, analytics, applications, auth, communications, files, interviews, jobs, resumes, review, users
+from app.api import agent, analytics, applications, auth, communications, files, interviews, jobs, onboarding, resumes, review, users
 from app.api.deps import default_rate_limit, limiter
 from app.config import settings
 from app.core.database import create_all, engine, wait_for_db
@@ -81,7 +81,7 @@ async def security_headers(request: Request, call_next):  # type: ignore[no-unty
     return response
 
 
-for router in (auth.router, users.router, resumes.router, jobs.router, applications.router, agent.router,
+for router in (auth.router, onboarding.router, users.router, resumes.router, jobs.router, applications.router, agent.router,
                communications.router, interviews.router, analytics.router, review.router, files.router):
     app.include_router(router, prefix=settings.API_PREFIX)
 

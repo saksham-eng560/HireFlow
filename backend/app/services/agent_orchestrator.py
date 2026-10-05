@@ -59,7 +59,7 @@ from app.services.llm import get_llm, llm_budget
 from app.services.location_focus import balance_by_location, get_focus, get_season, location_tier, season_status
 from app.services.notifier import notify, push_update
 from app.services.pdf_generator import render_resume_pdf
-from app.services.question_answerer import answer_questions, learnable_key, mappings_dict
+from app.services.question_answerer import answer_questions, learnable_key, mappings_dict, profile_links
 from app.services.rate_limiter import rate_limiter
 from app.services.resume_tailor import light_tailor, tailor_resume
 from app.services.role_focus import drop_off_focus
@@ -889,7 +889,8 @@ def prepare_application(db: Session, application_id: str, stage: bool | None = N
                     questions = [q for q in GreenhouseScraper().application_questions(ref.board, ref.job_id)
                                  if q["field_type"] != "file" and not q["question"].lower().startswith(("first name", "last name", "email", "phone"))]
                     app.custom_answers = answer_questions(questions, resume.parsed_content, user.prefs,
-                                                          mappings_dict(user.field_mappings), job)
+                                                          mappings_dict(user.field_mappings), job,
+                                                          links=profile_links(user))
                     run.log(f"Pre-answered {len(questions)} Greenhouse questions")
             except Exception as exc:  # noqa: BLE001
                 run.log(f"Could not pre-fetch Greenhouse questions: {exc}", level="warning")
@@ -1230,8 +1231,10 @@ def build_packet(db: Session, user: User, app: Application, resume_path: str | N
     mappings = mappings_dict(user.field_mappings)
     job = app.job
 
+    links = profile_links(user)
+
     def resolver(questions: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        return answer_questions(questions, rc.to_dict(), user.prefs, mappings, job)
+        return answer_questions(questions, rc.to_dict(), user.prefs, mappings, job, links=links)
 
     current = rc.experience[0] if rc.experience else None
     credentials = dict(user.ats_credentials or {})
@@ -1243,9 +1246,10 @@ def build_packet(db: Session, user: User, app: Application, resume_path: str | N
         email=info.email or user.email,
         phone=info.phone or user.phone or "",
         location=info.location or user.location or "",
-        linkedin=info.linkedin or user.linkedin_url or "",
-        github=info.github,
-        portfolio=info.portfolio or mappings.get("website", ""),
+        # Your profile links (onboarding / Settings) first, then the ones on the resume
+        linkedin=user.linkedin_url or info.linkedin or "",
+        github=user.github_url or info.github or "",
+        portfolio=user.portfolio_url or info.portfolio or mappings.get("website", ""),
         current_company=current.company if current else "",
         current_title=current.title if current else "",
         resume_path=resume_path,

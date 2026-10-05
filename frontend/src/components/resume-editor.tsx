@@ -13,9 +13,9 @@ type Setter = (next: ResumeContent) => void;
 
 function Section({ title, children, onAdd }: { title: string; children: React.ReactNode; onAdd?: () => void }) {
   return (
-    <section className="border p-4">
+    <section className="rounded-xl border bg-card p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-bold uppercase leading-none tracking-[0.12em]">{title}</h3>
+        <h3 className="text-sm font-semibold leading-none">{title}</h3>
         {onAdd && <Button type="button" variant="ghost" size="sm" onClick={onAdd}><Plus /> Add</Button>}
       </div>
       <div className="space-y-4">{children}</div>
@@ -49,8 +49,9 @@ export function ResumeEditor({ value, onChange }: { value: ResumeContent; onChan
     <div className="space-y-4">
       <Section title="Contact">
         <div className="grid gap-3 sm:grid-cols-2">
-          {(["name", "email", "phone", "location", "linkedin", "github", "portfolio"] as const).map((k) => (
-            <Field key={k} label={k[0].toUpperCase() + k.slice(1)} value={info[k] || ""} onChange={(v) => set("personal_info", { ...info, [k]: v })} />
+          {([["name", "Name"], ["email", "Email"], ["phone", "Phone"], ["location", "Location"], ["linkedin", "LinkedIn"],
+            ["github", "GitHub"], ["portfolio", "Portfolio"]] as const).map(([k, label]) => (
+            <Field key={k} label={label} value={info[k] || ""} onChange={(v) => set("personal_info", { ...info, [k]: v })} />
           ))}
         </div>
       </Section>

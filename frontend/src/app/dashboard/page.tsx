@@ -8,6 +8,7 @@ import {
 import { ApplicationCard } from "@/components/application-card";
 import { StatTile, TimelineChart } from "@/components/analytics-charts";
 import { TunnelGrid } from "@/components/brand";
+import { LinksBanner } from "@/components/links-banner";
 import { FocusStrip } from "@/components/motion-graphics";
 import { ScanProgressPanel } from "@/components/scan-progress";
 import { EmptyState } from "@/components/empty-state";
@@ -112,6 +113,7 @@ export default function OverviewPage() {
         }
       />
       <ScanProgressPanel scan={scan} />
+      {me && <LinksBanner me={me} />}
       {me && <FocusStrip prefs={me.preferences} />}
       <Onboarding />
       {status && <SwipeBand count={status.to_review} onScan={startScan} scanning={scanning || !!running} disabled={!status.has_master_resume} />}

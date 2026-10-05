@@ -114,10 +114,15 @@ def google_login(next: str | None = None) -> RedirectResponse:
         raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, str(exc)) from exc
 
 
+# Where "Connect Gmail & Calendar" may send you back to (a fixed list: never an open redirect)
+CONNECT_RETURN_PATHS = ("/dashboard/settings", "/onboarding")
+
+
 @router.get("/google/connect")
-def google_connect(user: CurrentUser) -> dict:
+def google_connect(user: CurrentUser, next: str = "/dashboard/settings") -> dict:
+    redirect_after = next if next in CONNECT_RETURN_PATHS else "/dashboard/settings"
     try:
-        return {"url": google_oauth.build_auth_url("connect", user_id=str(user.id), redirect_after="/dashboard/settings")}
+        return {"url": google_oauth.build_auth_url("connect", user_id=str(user.id), redirect_after=redirect_after)}
     except google_oauth.GoogleNotConfigured as exc:
         raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, str(exc)) from exc
 

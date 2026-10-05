@@ -16,11 +16,12 @@ import { Progress } from "@/components/ui/progress";
 import { Select } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { cleanProfiles, ProfileLinksEditor, profileErrors } from "@/components/onboarding/profile-links";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
 import { useIntegrations, useMe } from "@/hooks/use-applications";
 import { ApiError, api, del, fetcher, patch, post, put } from "@/lib/api-client";
-import type { FieldMapping, Integrations, LLMTestResult, LocationFocus, OllamaPullProgress, Preferences, StandardField, StudentInfo } from "@/lib/types";
+import type { FieldMapping, Integrations, LLMTestResult, LocationFocus, OllamaPullProgress, OnboardingProfiles, Preferences, StandardField, StudentInfo } from "@/lib/types";
 import { PLATFORM_LABELS, cn, timeAgo } from "@/lib/utils";
 
 const ALL_PLATFORMS = ["internshala", "internships", "greenhouse", "lever", "ashby", "workday", "linkedin", "indeed", "glassdoor", "wellfound", "generic"];
@@ -422,21 +423,35 @@ function FocusCard({ prefs, setPrefs, onSave, saving }: {
 
 function ProfileForm() {
   const { data: me, mutate } = useMe();
-  const [form, setForm] = useState({ full_name: "", phone: "", location: "", linkedin_url: "" });
+  const [form, setForm] = useState({ full_name: "", phone: "", location: "" });
+  const [links, setLinks] = useState<OnboardingProfiles>({ linkedin_url: null, github_url: null, portfolio_url: null, profile_links: [] });
+  const [showErrors, setShowErrors] = useState(false);
   const { saving, run } = useSaver();
   useEffect(() => {
-    if (me) setForm({ full_name: me.full_name, phone: me.phone || "", location: me.location || "", linkedin_url: me.linkedin_url || "" });
+    if (!me) return;
+    setForm({ full_name: me.full_name, phone: me.phone || "", location: me.location || "" });
+    setLinks({ linkedin_url: me.linkedin_url, github_url: me.github_url, portfolio_url: me.portfolio_url, profile_links: me.profile_links || [] });
   }, [me]);
+  const save = () => {
+    setShowErrors(true);
+    if (!form.full_name.trim() || Object.values(profileErrors(links)).some(Boolean)) return;
+    run(async () => { await patch("/users/me", { ...form, ...cleanProfiles(links) }); await mutate(); setShowErrors(false); });
+  };
   return (
     <Card>
-      <CardHeader><CardTitle>Profile</CardTitle><CardDescription>{me?.email}</CardDescription></CardHeader>
+      <CardHeader>
+        <CardTitle>Profile & links</CardTitle>
+        <CardDescription>{me?.email} · Forms use these for your name, contact details, LinkedIn, GitHub and other profile questions.</CardDescription>
+      </CardHeader>
       <CardContent>
-        <div className="grid max-w-2xl gap-4 sm:grid-cols-2">
-          {([["full_name", "Full name"], ["phone", "Phone"], ["location", "Location"], ["linkedin_url", "LinkedIn URL"]] as const).map(([k, label]) => (
+        <div className="grid max-w-2xl gap-4 sm:grid-cols-3">
+          {([["full_name", "Full name"], ["phone", "Phone"], ["location", "Location"]] as const).map(([k, label]) => (
             <div key={k} className="space-y-1.5"><Label htmlFor={`profile-${k}`}>{label}</Label><Input id={`profile-${k}`} value={form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })} /></div>
           ))}
         </div>
-        <Button className="mt-4" loading={saving} onClick={() => run(async () => { await patch("/users/me", form); await mutate(); })}><Save /> Save profile</Button>
+        {showErrors && !form.full_name.trim() && <p role="alert" className="mt-2 text-xs font-medium text-destructive">Your name can’t be empty</p>}
+        <div className="mt-6 max-w-2xl"><ProfileLinksEditor value={links} onChange={setLinks} showErrors={showErrors} /></div>
+        <Button className="mt-6" loading={saving} onClick={save}><Save /> Save profile</Button>
       </CardContent>
     </Card>
   );
@@ -1033,7 +1048,7 @@ function SettingsInner() {
           <TabsTrigger value="sources">Job sources</TabsTrigger>
           <TabsTrigger value="answers">Saved answers</TabsTrigger>
           <TabsTrigger value="integrations">Integrations</TabsTrigger>
-          <TabsTrigger value="profile">Profile</TabsTrigger>
+          <TabsTrigger value="profile">Profile & links</TabsTrigger>
           <TabsTrigger value="privacy">Privacy</TabsTrigger>
         </TabsList>
         <TabsContent value="mass-apply"><MassApplyPanel /></TabsContent>

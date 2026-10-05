@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     PUBLIC_API_URL: str = "http://localhost:8000"
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
     ALLOW_REGISTRATION: bool = True
+    # Public demo: nothing real is sent (dry-run submissions to the demo careers site, no job-site logins, no Gmail
+    # sending), a one-click demo account, and "Load sample profile" in onboarding. See docs/HIREFLOW_PLAN.md §5.5.
+    DEMO_MODE: bool = False
 
     # ---- Security ----
     SECRET_KEY: str = DEFAULT_SECRET
@@ -132,6 +135,8 @@ class Settings(BaseSettings):
     EMAIL_POLL_MINUTES: int = 5
     MAX_JOBS_PER_SOURCE: int = 50
     MAX_LLM_EVALUATIONS_PER_SCAN: int = 40
+    # Hard ceiling on applications a day: no preference, preset or the UI can go above it (default 10 for new users)
+    MAX_APPLICATIONS_PER_DAY_CEILING: int = 25
     # ---- Scan speed ----
     SCAN_SOURCE_CONCURRENCY: int = 8  # job sources (platforms) searched at the same time
     SCRAPER_BOARD_CONCURRENCY: int = 6  # company boards / pages fetched at once within one source

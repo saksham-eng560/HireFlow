@@ -41,7 +41,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
     try {
       if (mode === "login") await post("/auth/login", { email, password });
       else await post("/auth/register", { email, password, full_name: fullName });
-      router.replace(mode === "register" ? "/dashboard?welcome=1" : next);
+      router.replace(mode === "register" ? "/onboarding" : next);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong");
     } finally {
