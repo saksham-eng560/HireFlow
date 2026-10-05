@@ -154,12 +154,14 @@ jobs:
         working-directory: frontend
         env:
           BACKEND_URL: http://localhost:8000
+          NEXT_PUBLIC_DEMO_MODE: "true"  # built like the public demo's dashboard
         run: |
           npm ci
           npm run build
       - name: Happy path, Try the demo, landing + SEO, phone swipe, accessibility (axe)
         env:
           E2E_LOGS: ${{ runner.temp }}
+          NEXT_PUBLIC_DEMO_MODE: "true"
         run: scripts/e2e.sh
 
   extension:

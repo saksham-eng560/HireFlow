@@ -2,6 +2,10 @@
 const { withSentryConfig } = require("@sentry/nextjs/config");
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
+if (process.env.VERCEL && !process.env.BACKEND_URL) {
+  // On Vercel, localhost is nothing: every API call would fail until BACKEND_URL is set (docs/DEPLOY.md)
+  console.warn("\n⚠ BACKEND_URL is not set: the dashboard has no API to talk to. Set it and redeploy.\n");
+}
 
 const nextConfig = {
   reactStrictMode: true,

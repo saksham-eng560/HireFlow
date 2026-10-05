@@ -29,24 +29,40 @@ function errorMessage(body: unknown, fallback: string): string {
   return fallback;
 }
 
+/** Shown when the API can't be reached at all, instead of a bare status code. */
+export const SERVER_UNREACHABLE =
+  "Can't reach the HireFlow server right now. It may be starting up (free servers sleep when idle): try again in a minute.";
+
+// The API always answers in JSON. A non-JSON 404 or 5xx comes from whatever sits in front of it: the dashboard's
+// proxy with no backend behind it, or a host whose server is asleep, starting or down.
+const UNREACHABLE_STATUSES = new Set([404, 500, 502, 503, 504]);
+
 export async function api<T = unknown>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
   const { json, headers, ...rest } = init;
-  const response = await fetch(path.startsWith("http") ? path : `${API_BASE}${path}`, {
-    credentials: "include",
-    ...rest,
-    headers: {
-      ...(json !== undefined ? { "Content-Type": "application/json" } : {}),
-      ...headers,
-    },
-    body: json !== undefined ? JSON.stringify(json) : rest.body,
-  });
+  let response: Response;
+  try {
+    response = await fetch(path.startsWith("http") ? path : `${API_BASE}${path}`, {
+      credentials: "include",
+      ...rest,
+      headers: {
+        ...(json !== undefined ? { "Content-Type": "application/json" } : {}),
+        ...headers,
+      },
+      body: json !== undefined ? JSON.stringify(json) : rest.body,
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") throw err;
+    throw new ApiError(0, SERVER_UNREACHABLE);  // offline, DNS, connection refused
+  }
   const contentType = response.headers.get("content-type") || "";
-  const body = contentType.includes("application/json") ? await response.json().catch(() => null) : null;
+  const isJson = contentType.includes("application/json");
+  const body = isJson ? await response.json().catch(() => null) : null;
   if (!response.ok) {
     if (response.status === 401 && typeof window !== "undefined" && !path.startsWith("/auth/")) {
       const next = encodeURIComponent(window.location.pathname + window.location.search);
       window.location.href = `/login?next=${next}`;
     }
+    if (!isJson && UNREACHABLE_STATUSES.has(response.status)) throw new ApiError(response.status, SERVER_UNREACHABLE);
     throw new ApiError(response.status, errorMessage(body, `Request failed (${response.status})`), body);
   }
   return body as T;

@@ -59,6 +59,7 @@ time):
 |---|---|
 | `BACKEND_URL` | `https://<your-user>-hireflow.hf.space` |
 | `NEXT_PUBLIC_WS_URL` | `wss://<your-user>-hireflow.hf.space/api/v1/ws` (live updates; without it the dashboard polls) |
+| `NEXT_PUBLIC_DEMO_MODE` | `true` ("Try the demo" shows straight away, even while the Space wakes up) |
 
 Open the dashboard and press **Try the demo**. To check everything at once:
 `python3 scripts/smoke_test.py --site https://<dashboard> --api https://<your-user>-hireflow.hf.space --demo`.
@@ -209,6 +210,7 @@ Everything else (Google, SMTP, proxies, CAPTCHA solvers) stays unset: the demo t
 | `BACKEND_URL` | the API's URL (`/api/v1/*` is proxied there) | build time |
 | `NEXT_PUBLIC_WS_URL` | `wss://<api host>/api/v1/ws` (live updates; Vercel doesn't proxy WebSockets) | build time |
 | `NEXT_PUBLIC_SITE_URL` | the dashboard's public URL (canonical links, sitemap, social previews) | build time |
+| `NEXT_PUBLIC_DEMO_MODE` | `true`: "Try the demo" shows before the API answers (and while it's waking up) | build time |
 | `NEXT_PUBLIC_GITHUB_URL`, `NEXT_PUBLIC_AUTHOR_NAME`, `NEXT_PUBLIC_AUTHOR_URL` | the landing page's links (optional) | build time |
 | `NEXT_PUBLIC_DEMO_VIDEO_URL` | the walkthrough: a YouTube or Loom link or an `.mp4` (optional) | build time |
 | `NEXT_PUBLIC_SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_ENVIRONMENT` | the Next.js project's DSN (optional) | build time |
