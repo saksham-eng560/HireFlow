@@ -54,10 +54,10 @@ export function PipelineMotion({ className }: { className?: string }) {
         {CHIPS.map((chip, i) => (
           <motion.div key={chip.role}
             className="absolute top-2 flex w-40 flex-col rounded-lg border border-foreground/30 bg-background px-3 py-2 shadow-lg"
-            style={reduce ? { left: `${6 + i * 32}%` } : undefined}
-            initial={reduce ? false : { left: "-22%", opacity: 0 }}
-            animate={reduce ? undefined : { left: ["-22%", "4%", "84%", "104%"], opacity: [0, 1, 1, 0] }}
-            transition={reduce ? undefined : { duration: LOOP, times: [0, 0.1, 0.9, 1], repeat: Infinity, ease: "linear", delay: i * gap }}>
+            initial={{ left: "-22%", opacity: 0 }}
+            /* reduced motion: cards rest at stations (an explicit target: "reduce" is only known after mount) */
+            animate={reduce ? { left: `${6 + i * 32}%`, opacity: 1 } : { left: ["-22%", "4%", "84%", "104%"], opacity: [0, 1, 1, 0] }}
+            transition={reduce ? { duration: 0 } : { duration: LOOP, times: [0, 0.1, 0.9, 1], repeat: Infinity, ease: "linear", delay: i * gap }}>
             <span className="truncate text-xs font-semibold">{chip.role}</span>
             <span className="truncate text-[11px] text-muted-foreground">{chip.place} · Summer 2027</span>
           </motion.div>
@@ -81,7 +81,7 @@ export function FocusStrip({ prefs }: { prefs: Preferences }) {
     on && prime ? `${prime} first` : null,
   ].filter(Boolean);
   return (
-    <div className="mb-8 flex flex-wrap items-center gap-x-4 gap-y-2 border px-5 py-3 text-sm">
+    <div className="rounded-xl mb-8 flex flex-wrap items-center gap-x-4 gap-y-2 border px-5 py-3 text-sm">
       <span className="relative flex h-5 w-5 items-center justify-center text-primary" aria-hidden>
         <Crosshair className="h-4 w-4" />
         {!reduce && (

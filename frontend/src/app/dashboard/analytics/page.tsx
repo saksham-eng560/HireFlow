@@ -1,12 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import { BarChart3 } from "lucide-react";
 import { MatchHistogram, StatTile, StatusBreakdown, TimelineChart } from "@/components/analytics-charts";
+import { EmptyState } from "@/components/empty-state";
+import { ErrorState } from "@/components/error-state";
 import { PageHeader } from "@/components/page-header";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useOverview } from "@/hooks/use-applications";
-import { PLATFORM_LABELS, cn } from "@/lib/utils";
+import { PLATFORM_LABELS, cn, plural } from "@/lib/utils";
 
 const RANGES = [
   { label: "Last 7 days", days: 7 },
@@ -17,7 +22,7 @@ const RANGES = [
 
 export default function AnalyticsPage() {
   const [range, setRange] = useState<number | undefined>(undefined);
-  const { data, isLoading } = useOverview(range);
+  const { data, isLoading, error, mutate } = useOverview(range);
 
   return (
     <div>
@@ -31,13 +36,19 @@ export default function AnalyticsPage() {
           </button>
         ))}
       </div>
-      {isLoading && !data ? <Skeleton className="h-96" /> : data && (
+      {error && !data && <ErrorState error={error} onRetry={() => mutate()} title="Couldn't load your analytics" />}
+      {data && data.totals.total === 0 && range === undefined && (
+        <EmptyState icon={BarChart3} title="Nothing to measure yet"
+          description="Analytics fill in once applications go out: keep a few jobs in Swipe Review and they'll show up here."
+          action={<Link href="/dashboard/review" className={buttonVariants()}>Open Swipe Review</Link>} />
+      )}
+      {isLoading && !data ? <Skeleton className="h-96" /> : data && (data.totals.total > 0 || range !== undefined) && (
         <div className={cn("space-y-6", isLoading && "opacity-60")}>
           <div className="grid gap-4 sm:grid-cols-2 sm:[&>:last-child]:col-span-2 xl:grid-cols-5 xl:[&>:last-child]:col-span-1">
             <StatTile label="Applications sent" value={data.totals.applied} hint={`${data.totals.total} tracked in total`} />
-            <StatTile label="Response rate" value={`${data.rates.response_rate}%`} hint={`${data.totals.responses} responses`} />
-            <StatTile label="Interview rate" value={`${data.rates.interview_rate}%`} hint={`${data.totals.interviews} reached interviews`} />
-            <StatTile label="Offer rate" value={`${data.rates.offer_rate}%`} hint={`${data.totals.offers} offers from interviews`} />
+            <StatTile label="Response rate" value={`${data.rates.response_rate}%`} hint={plural(data.totals.responses, "response")} />
+            <StatTile label="Interview rate" value={`${data.rates.interview_rate}%`} hint={`${plural(data.totals.interviews, "application")} reached interviews`} />
+            <StatTile label="Offer rate" value={`${data.rates.offer_rate}%`} hint={`${plural(data.totals.offers, "offer")} from interviews`} />
             <StatTile label="Time to first response" value={data.rates.avg_days_to_response != null ? `${data.rates.avg_days_to_response} days` : "—"} hint="Average, submitted → first reply" />
           </div>
 

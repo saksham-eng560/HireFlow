@@ -87,12 +87,12 @@ export function AnimatedNumber({ value, format = (n) => n.toLocaleString(), clas
   const [text, setText] = useState(() => format(0));
 
   useEffect(() => {
-    if (!inView) return;
-    if (reduce) {
+    if (reduce) {  // no count-up: the real value right away, in view or not
       setText(format(value));
       from.current = value;
       return;
     }
+    if (!inView) return;
     const controls = animate(from.current, value, {
       duration, ease: EASE_OUT, onUpdate: (v) => setText(format(Math.round(v))),
     });

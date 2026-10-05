@@ -93,7 +93,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
                 <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required
                   minLength={mode === "register" ? 8 : undefined} autoComplete={mode === "login" ? "current-password" : "new-password"} />
               </div>
-              {error && <p role="alert" className="border border-primary/60 bg-primary/10 p-3 text-sm text-primary">{error}</p>}
+              {error && <p role="alert" className="rounded-lg border border-primary/60 bg-primary/10 p-3 text-sm text-primary">{error}</p>}
               <Button type="submit" size="lg" className="w-full" loading={loading}>
                 {mode === "login" ? "Sign in" : "Create account"} <ArrowUpRight />
               </Button>

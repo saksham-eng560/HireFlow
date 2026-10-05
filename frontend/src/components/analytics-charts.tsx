@@ -43,7 +43,7 @@ function LineLegend() {
 function TimelineTooltip({ active, payload, label }: TooltipProps<number, string>) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="border border-line bg-popover px-3 py-2 text-xs shadow-xl">
+    <div className="rounded-lg border border-line bg-popover px-3 py-2 text-xs shadow-xl">
       <p className="mb-1 text-muted-foreground">{shortDate(String(label))}</p>
       {SERIES.map((s) => {
         const item = payload.find((p) => p.dataKey === s.key);
@@ -105,7 +105,7 @@ export function TimelineChart({ data, height = 260 }: { data: Overview["timeline
 function CountTooltip({ active, payload, label }: TooltipProps<number, string>) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="border border-line bg-popover px-3 py-2 text-xs shadow-xl">
+    <div className="rounded-lg border border-line bg-popover px-3 py-2 text-xs shadow-xl">
       <span className="font-semibold tabular-nums text-foreground">{payload[0].value}</span>{" "}
       <span className="text-muted-foreground">jobs scored {label}</span>
     </div>
@@ -160,7 +160,7 @@ export function StatTile({ label, value, hint, className, icon }: {
   icon?: React.ReactNode;
 }) {
   return (
-    <div className={cn("flex flex-col border bg-card p-5", className)}>
+    <div className={cn("rounded-xl flex flex-col border bg-card p-5", className)}>
       <div className="flex items-center justify-between gap-2 text-muted-foreground">
         <span className="label-caps text-[10px]">{label}</span>
         {icon}

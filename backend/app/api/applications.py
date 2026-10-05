@@ -351,7 +351,9 @@ def restage(application_id: str, user: CurrentUser, db: DB) -> dict:
         raise HTTPException(status.HTTP_409_CONFLICT, "Only pending or failed applications can be re-staged")
     app.auto_submit = False  # you're reviewing this one yourself now
     set_status(db, app, ApplicationStatus.PREPARING, "user", "Re-filling the form")
-    enqueue("stage_application", str(app.id), after_commit=db)
+    # Never prepared (it failed before the resume was tailored): run the whole preparation, which fills the form too
+    prepared = app.tailored_resume_id is not None or bool(app.cover_letter)
+    enqueue("stage_application" if prepared else "prepare_application", str(app.id), after_commit=db)
     return _detail(db, app)
 
 

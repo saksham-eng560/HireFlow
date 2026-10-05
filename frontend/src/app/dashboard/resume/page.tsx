@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import { Download, FileText, RefreshCw, Save, Sparkles, Upload } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
+import { ErrorState } from "@/components/error-state";
 import { PageHeader } from "@/components/page-header";
 import { ResumeEditor } from "@/components/resume-editor";
 import { Badge } from "@/components/ui/badge";
@@ -108,6 +109,16 @@ export default function ResumePage() {
 
   if (isLoading) return <Skeleton className="h-96" />;
 
+  // A 404 means there's no master resume yet (the upload prompt below); anything else is a load failure
+  if (error && !(error instanceof ApiError && error.status === 404)) {
+    return (
+      <div>
+        <PageHeader title="Resume Lab" description="Your master resume is the single source of truth — every tailored version is derived from it." />
+        <ErrorState error={error} onRetry={() => mutate()} title="Couldn't load your resume" />
+      </div>
+    );
+  }
+
   if (error || !master) {
     return (
       <div>
@@ -180,7 +191,7 @@ export default function ResumePage() {
             </CardHeader>
             {!integrations?.linkedin.connected && (
               <CardContent className="text-sm text-muted-foreground">
-                Connect LinkedIn with the Chrome extension in <Link href="/dashboard/settings?tab=integrations" className="text-primary hover:underline">Settings</Link>.
+                Connect LinkedIn with the Chrome extension in <Link href="/dashboard/settings?tab=integrations" className="text-primary underline underline-offset-4">Settings</Link>.
               </CardContent>
             )}
           </Card>

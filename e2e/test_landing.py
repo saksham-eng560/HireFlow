@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import struct
-import urllib.request
 
 from conftest import BASE
 from playwright.sync_api import Page, expect
@@ -12,9 +11,9 @@ SECTIONS = ["Find → Swipe → Apply", "HireFlow in 60 seconds", "Everything af
             "An agent with brakes", "How it's built", "Questions"]
 
 
-def _get(path: str) -> tuple[int, str, bytes]:
-    with urllib.request.urlopen(f"{BASE}{path}", timeout=30) as r:
-        return r.status, r.headers.get("content-type", ""), r.read()
+def _get(page: Page, path: str) -> tuple[int, str, bytes]:
+    r = page.request.get(f"{BASE}{path}")
+    return r.status, r.headers.get("content-type", ""), r.body()
 
 
 def test_every_section_is_there_and_the_buttons_work(page: Page) -> None:
@@ -51,11 +50,11 @@ def test_search_engines_and_link_previews(page: Page) -> None:
     og = page.locator('meta[property="og:image"]').get_attribute("content")
     assert page.locator('meta[name="description"]').get_attribute("content")
     assert page.locator('meta[name="twitter:card"]').get_attribute("content") == "summary_large_image"
-    status, kind, png = _get("/" + og.split("/", 3)[3])
+    status, kind, png = _get(page, "/" + og.split("/", 3)[3])
     assert status == 200 and kind == "image/png"
     assert struct.unpack(">II", png[16:24]) == (1200, 630)
 
-    status, _, robots = _get("/robots.txt")
+    status, _, robots = _get(page, "/robots.txt")
     assert status == 200 and b"Disallow: /dashboard" in robots and b"Sitemap:" in robots
-    status, _, sitemap = _get("/sitemap.xml")
+    status, _, sitemap = _get(page, "/sitemap.xml")
     assert status == 200 and b"/responsible-use</loc>" in sitemap and b"/dashboard" not in sitemap

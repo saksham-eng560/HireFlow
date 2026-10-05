@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import { Check, CheckCheck, FileText, Layers, Play, Radar, RotateCcw, Search, X } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
+import { ErrorState } from "@/components/error-state";
 import { AnimatedNumber } from "@/components/motion";
 import { PageHeader } from "@/components/page-header";
 import { ScanProgressPanel } from "@/components/scan-progress";
@@ -52,7 +53,7 @@ export default function SwipeReviewPage() {
   const [filters, setFilters] = useState<Filters>({ jobType: "all", remote: false, q: "" });
   const [search, setSearch] = useState("");
   const key = queueKey(filters);
-  const { data, isLoading, mutate } = useSWR<ReviewQueue>(key, fetcher, { revalidateOnFocus: false });
+  const { data, isLoading, error, mutate } = useSWR<ReviewQueue>(key, fetcher, { revalidateOnFocus: false });
   const { mutate: refreshStatus } = useAgentStatus();
   const [decided, setDecided] = useState<Set<string>>(new Set());
   const [front, setFront] = useState<ReviewCard[]>([]); // cards put back by "undo"
@@ -213,21 +214,27 @@ export default function SwipeReviewPage() {
 
   return (
     <div>
-      <PageHeader eyebrow="Mass apply" title="Swipe Review"
+      <PageHeader eyebrow="Mass apply" title="Swipe Review" compact
         description="Every job that passed your filters, best matches first. Keep it and the agent tailors, fills and applies. Skip it and it's gone. Nothing is skipped for you."
         actions={
           <>
             <Button variant="outline" onClick={scan} loading={scanning}>
               {!scanning && <Radar />} {scanner.running ? `Scanning ${Math.round(scanner.progress?.percent ?? 0)}%` : "Scan for more"}
             </Button>
-            <Link href="/dashboard/applications" className={buttonVariants({ variant: "ghost" })}>Applications</Link>
+            <Link href="/dashboard/applications" className={cn(buttonVariants({ variant: "ghost" }), "hidden sm:inline-flex")}>Applications</Link>
           </>
         }
       />
 
       <ScanProgressPanel scan={scanner} />
 
-      <div className="mb-8 grid grid-cols-2 border sm:grid-cols-4 grid-lines">
+      {/* phones: one line, so the deck starts near the top */}
+      <p className="mb-4 flex justify-between gap-2 rounded-xl border bg-card px-4 py-2 text-sm text-muted-foreground sm:hidden">
+        <span><b className="font-mono text-primary">{s?.remaining ?? "—"}</b> left</span>
+        <span><b className="font-mono text-foreground">{s?.kept_today ?? "—"}</b> kept today</span>
+        <span><b className="font-mono text-foreground">{s?.skipped_today ?? "—"}</b> skipped</span>
+      </p>
+      <div className="mb-8 hidden grid-cols-2 border sm:grid sm:grid-cols-4 grid-lines">
         <StatCell label="Left to swipe" value={s?.remaining ?? "—"} accent />
         <StatCell label="Kept today" value={s?.kept_today ?? "—"} />
         <StatCell label="Skipped today" value={s?.skipped_today ?? "—"} />
@@ -235,7 +242,7 @@ export default function SwipeReviewPage() {
       </div>
 
       {noResume && (
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border border-primary/60 bg-primary/10 p-4 text-sm">
+        <div className="rounded-xl mb-6 flex flex-wrap items-center justify-between gap-3 border border-primary/60 bg-primary/10 p-4 text-sm">
           <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-primary" /> Upload your master resume before keeping jobs — every application is tailored from it.</span>
           <Link href="/dashboard/resume" className={buttonVariants({ size: "sm" })}>Upload resume</Link>
         </div>
@@ -244,14 +251,18 @@ export default function SwipeReviewPage() {
       <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1fr)_340px]">
         {/* ------------------------------------------------------------ deck */}
         <section aria-label="Job deck" className="flex flex-col items-center">
-          <div className="relative mx-auto h-[600px] w-full max-w-[560px] sm:h-[640px]">
+          <div className="relative mx-auto h-[min(600px,calc(100svh-19rem))] min-h-[400px] w-full max-w-[560px] sm:h-[640px] sm:max-h-none">
             {isLoading ? (
               <Skeleton className="absolute inset-0" />
+            ) : error && !data ? (
+              <div className="absolute inset-0 flex items-center">
+                <ErrorState className="w-full" error={error} onRetry={() => mutate()} title="Couldn't load your deck" />
+              </div>
             ) : !top ? (
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full">
                   <EmptyState icon={Layers} title={filters.q || filters.remote || filters.jobType !== "all" ? "No jobs match these filters" : "You're all caught up"}
-                    description={s?.remaining ? "Clear the filters to see the rest of your deck." : "Run a scan to pull in fresh internships. Tip: apply the Internships preset in Settings to add 4,000+ listings and 110 startup boards."}
+                    description={s?.remaining ? "Clear the filters to see the rest of your deck." : "Run a scan to pull in fresh internships. Tip: apply the Internships preset in Settings to add the curated internship lists and 107 startup boards."}
                     action={
                       <div className="flex flex-wrap justify-center gap-2">
                         <Button onClick={scan} loading={scanning}><Play /> Scan now</Button>
@@ -269,7 +280,7 @@ export default function SwipeReviewPage() {
             )}
           </div>
 
-          <div className="mt-10 flex w-full max-w-[560px] items-center justify-center gap-3 sm:gap-4">
+          <div className="mt-4 flex w-full max-w-[560px] items-center justify-center gap-3 sm:mt-10 sm:gap-4">
             <Button variant="ghost" size="icon" className="h-12 w-12 shrink-0 rounded-full border border-line" onClick={undo}
               disabled={!history.length} aria-label="Undo last swipe (Z)" title="Undo (Z)">
               <RotateCcw />
@@ -285,8 +296,9 @@ export default function SwipeReviewPage() {
             title="Already applied to this one yourself? It moves to Applied and the agent tracks it (A)">
             <CheckCheck /> I Applied to this myself
           </Button>
-          <p className="mt-3 text-center text-xs text-muted-foreground">
-            Drag the card, or use <kbd className="border px-1.5 py-0.5 font-mono">←</kbd> skip · <kbd className="border px-1.5 py-0.5 font-mono">→</kbd> keep · <kbd className="border px-1.5 py-0.5 font-mono">A</kbd> I applied · <kbd className="border px-1.5 py-0.5 font-mono">Z</kbd> undo
+          <p className="mt-3 text-center text-xs text-muted-foreground sm:hidden">Swipe the card right to keep it, left to skip it.</p>
+          <p className="mt-3 hidden text-center text-xs text-muted-foreground sm:block">
+            Drag the card, or use <kbd className="rounded border px-1.5 py-0.5 font-mono">←</kbd> skip · <kbd className="rounded border px-1.5 py-0.5 font-mono">→</kbd> keep · <kbd className="rounded border px-1.5 py-0.5 font-mono">A</kbd> I applied · <kbd className="rounded border px-1.5 py-0.5 font-mono">Z</kbd> undo
           </p>
         </section>
 
@@ -341,10 +353,10 @@ export default function SwipeReviewPage() {
                 <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Company, role or city" className="pl-9" aria-label="Search the deck" />
               </div>
               <ToggleGroup type="single" value={filters.jobType} onValueChange={(v) => v && setFilters((f) => ({ ...f, jobType: v }))}
-                className="grid grid-cols-3 border" aria-label="Job type">
-                <ToggleGroupItem value="all" className="h-9 text-xs font-semibold uppercase tracking-wider data-[state=on]:bg-foreground data-[state=on]:text-background">All</ToggleGroupItem>
-                <ToggleGroupItem value="internship" className="h-9 text-xs font-semibold uppercase tracking-wider data-[state=on]:bg-foreground data-[state=on]:text-background">Intern</ToggleGroupItem>
-                <ToggleGroupItem value="full-time" className="h-9 text-xs font-semibold uppercase tracking-wider data-[state=on]:bg-foreground data-[state=on]:text-background">Full-time</ToggleGroupItem>
+                className="grid grid-cols-3 gap-1 rounded-lg border p-1" aria-label="Job type">
+                <ToggleGroupItem value="all" className="h-8 rounded-md text-xs font-semibold uppercase tracking-wider data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">All</ToggleGroupItem>
+                <ToggleGroupItem value="internship" className="h-8 rounded-md text-xs font-semibold uppercase tracking-wider data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">Intern</ToggleGroupItem>
+                <ToggleGroupItem value="full-time" className="h-8 rounded-md text-xs font-semibold uppercase tracking-wider data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">Full-time</ToggleGroupItem>
               </ToggleGroup>
               <div className="flex items-center justify-between">
                 <Label htmlFor="remote-only" className="text-sm">Remote only</Label>

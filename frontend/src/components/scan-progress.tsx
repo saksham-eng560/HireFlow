@@ -85,7 +85,7 @@ function SourceChip({ source }: { source: ScanSourceProgress }) {
   }[status];
   return (
     <li title={source.error || undefined}
-      className={cn("relative flex min-w-0 items-center gap-2 overflow-hidden border px-3 py-2 text-xs transition-colors",
+      className={cn("rounded-lg relative flex min-w-0 items-center gap-2 overflow-hidden border px-3 py-2 text-xs transition-colors",
         status === "running" ? "border-primary/60" : "border-line/70")}>
       {icon}
       <span className="min-w-0 flex-1 truncate font-semibold">{label}</span>
@@ -233,7 +233,7 @@ export function ScanIndicator({ run }: { run: AgentRun | null }) {
           </motion.span>
           <motion.span key="scan-pill" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}>
             <Link href="/dashboard" title={run.progress?.message || "Scanning"}
-              className="label-caps mr-2 inline-flex items-center gap-2 border border-foreground/40 px-3 py-1.5 text-[11px] transition-colors hover:border-foreground">
+              className="rounded-full label-caps mr-2 inline-flex items-center gap-2 border border-foreground/40 px-3 py-1.5 text-[11px] transition-colors hover:border-foreground">
               <Radar className="h-3.5 w-3.5 animate-spin text-primary [animation-duration:2.4s]" />
               <span className="hidden sm:inline">Scanning</span>
               <span className="tabular-nums">{Math.round(percent)}%</span>

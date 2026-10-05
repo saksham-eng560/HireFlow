@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, cloneElement, isValidElement, useEffect, useId, useState } from "react";
 import useSWR from "swr";
 import { AlertTriangle, Bot, CheckCircle2, Copy, Cpu, Download, KeyRound, Link2, Mail, Puzzle, RefreshCw, Save, Trash2, Zap } from "lucide-react";
+import { ErrorState } from "@/components/error-state";
 import { PageHeader } from "@/components/page-header";
 import { TagInput } from "@/components/tag-input";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Select } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { DemoNotice } from "@/components/demo";
@@ -39,14 +41,20 @@ const PRESETS = [
   { name: "new-grad", title: "New grad", text: "Entry-level full-time roles from the SimplifyJobs new-grad list plus the startup boards. Turns “Internships only” off." },
 ] as const;
 
+/** While a settings panel's data loads (or if it fails to). */
+function PanelPlaceholder({ error, onRetry }: { error?: unknown; onRetry?: () => unknown }) {
+  if (error) return <ErrorState error={error} onRetry={onRetry} title="Couldn't load these settings" />;
+  return <div className="space-y-4" aria-busy="true"><Skeleton className="h-40" /><Skeleton className="h-64" /></div>;
+}
+
 function MassApplyPanel() {
-  const { data: me, mutate } = useMe();
+  const { data: me, error: meError, mutate } = useMe();
   const toast = useToast();
   const [prefs, setPrefs] = useState<Preferences | null>(null);
   const [applying, setApplying] = useState<string | null>(null);
   const { saving, run } = useSaver();
   useEffect(() => { if (me) setPrefs(me.preferences); }, [me]);
-  if (!prefs) return null;
+  if (!prefs) return <PanelPlaceholder error={meError} onRetry={() => mutate()} />;
   const set = <K extends keyof Preferences>(k: K, v: Preferences[K]) => setPrefs({ ...prefs, [k]: v });
   const save = () => run(async () => {
     await put("/users/me/preferences", { preferences: {
@@ -234,11 +242,11 @@ function StudentRows({ prefs, set }: {
 }
 
 function PreferencesForm({ sourcesOnly = false }: { sourcesOnly?: boolean }) {
-  const { data: me, mutate } = useMe();
+  const { data: me, error: meError, mutate } = useMe();
   const [prefs, setPrefs] = useState<Preferences | null>(null);
   const { saving, run } = useSaver();
   useEffect(() => { if (me) setPrefs(me.preferences); }, [me]);
-  if (!prefs) return null;
+  if (!prefs) return <PanelPlaceholder error={meError} onRetry={() => mutate()} />;
   const set = <K extends keyof Preferences>(k: K, v: Preferences[K]) => setPrefs({ ...prefs, [k]: v });
   const setSource = (k: keyof Preferences["sources"], v: string[]) => setPrefs({ ...prefs, sources: { ...prefs.sources, [k]: v } });
   const save = () => run(async () => { await put("/users/me/preferences", { preferences: prefs }); await mutate(); });
@@ -464,14 +472,14 @@ function ProfileForm() {
 }
 
 function FieldMappingsForm() {
-  const { data, mutate } = useSWR<{ mappings: FieldMapping[]; standard_fields: Record<string, StandardField> }>("/users/me/field-mappings", fetcher);
+  const { data, error, mutate } = useSWR<{ mappings: FieldMapping[]; standard_fields: Record<string, StandardField> }>("/users/me/field-mappings", fetcher);
   const [values, setValues] = useState<Record<string, string>>({});
   const [custom, setCustom] = useState({ name: "", value: "" });
   const { saving, run } = useSaver();
   useEffect(() => {
     if (data) setValues(Object.fromEntries(data.mappings.map((m) => [m.field_name, m.field_value])));
   }, [data]);
-  if (!data) return null;
+  if (!data) return <PanelPlaceholder error={error} onRetry={() => mutate()} />;
   const standardKeys = Object.keys(data.standard_fields);
   const customMappings = data.mappings.filter((m) => !standardKeys.includes(m.field_name));
   const save = () => run(async () => {
@@ -537,7 +545,7 @@ const OLLAMA_SETUPS: { id: string; title: string; steps: React.ReactNode[]; env:
     id: "mac",
     title: "This computer (Mac)",
     steps: [
-      <>Install the Ollama app from <a className="text-primary underline-offset-4 hover:underline" href="https://ollama.com/download" target="_blank" rel="noreferrer">ollama.com/download</a> and open it once.</>,
+      <>Install the Ollama app from <a className="text-primary underline underline-offset-4" href="https://ollama.com/download" target="_blank" rel="noreferrer">ollama.com/download</a> and open it once.</>,
       <>Add these lines to <code>.env</code> in the HireFlow folder.</>,
       <>Restart with <code>./start.sh --ollama</code>. It checks Ollama and downloads the model (about 3.4 GB) for you.</>,
     ],
@@ -557,7 +565,7 @@ const OLLAMA_SETUPS: { id: string; title: string; steps: React.ReactNode[]; env:
     id: "cloud",
     title: "Ollama Cloud",
     steps: [
-      <>Create an API key at <a className="text-primary underline-offset-4 hover:underline" href="https://ollama.com/settings/keys" target="_blank" rel="noreferrer">ollama.com/settings/keys</a>.</>,
+      <>Create an API key at <a className="text-primary underline underline-offset-4" href="https://ollama.com/settings/keys" target="_blank" rel="noreferrer">ollama.com/settings/keys</a>.</>,
       <>Add these lines to <code>.env</code>, then paste the key after <code>OLLAMA_API_KEY=</code> in the file itself.</>,
       <>Restart the app. There is nothing to download. The free plan answers one request at a time.</>,
     ],
@@ -577,7 +585,7 @@ function CopyBlock({ text, label }: { text: string; label: string }) {
   };
   return (
     <div className="relative">
-      <pre className="overflow-x-auto border border-border bg-muted p-3 pr-12 font-mono text-xs leading-relaxed">{text}</pre>
+      <pre className="rounded-lg overflow-x-auto border border-border bg-muted p-3 pr-12 font-mono text-xs leading-relaxed">{text}</pre>
       <Button size="icon" variant="outline" className="absolute right-2 top-2 h-7 w-7" aria-label={`Copy ${label}`} onClick={copy}><Copy /></Button>
     </div>
   );
@@ -734,7 +742,7 @@ function AIModelCard({ integ, refresh }: { integ: Integrations; refresh: () => P
             )}
           </div>
           {result && (
-            <div className={cn("border p-3", result.ok ? "border-success/60" : "border-primary/60")} role="status">
+            <div className={cn("rounded-lg border p-3", result.ok ? "border-success/60" : "border-primary/60")} role="status">
               <p className="flex flex-wrap items-center gap-2 font-medium">
                 {result.ok ? <CheckCircle2 className="h-4 w-4 text-success" /> : <AlertTriangle className="h-4 w-4 text-primary" />}
                 {result.ok ? `Answered in ${(result.latency_ms / 1000).toFixed(1)} s` : "The AI didn't answer"}
@@ -777,7 +785,7 @@ function AIModelCard({ integ, refresh }: { integ: Integrations; refresh: () => P
 }
 
 function IntegrationsPanel() {
-  const { data: integ, mutate } = useIntegrations();
+  const { data: integ, error: integError, mutate } = useIntegrations();
   const { data: me, mutate: mutateMe } = useMe();
   const [token, setToken] = useState<{ token: string; api_url: string } | null>(null);
   const [webhooks, setWebhooks] = useState({ discord: "", slack: "" });
@@ -793,7 +801,7 @@ function IntegrationsPanel() {
         popups: me.preferences.notification_popups !== false });
     }
   }, [me]);
-  if (!integ) return null;
+  if (!integ) return <PanelPlaceholder error={integError} onRetry={() => mutate()} />;
 
   const connectGoogle = () => run(async () => {
     const { url } = await api<{ url: string }>("/auth/google/connect");

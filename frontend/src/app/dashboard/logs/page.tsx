@@ -5,6 +5,8 @@ import { Suspense, useState } from "react";
 import useSWR from "swr";
 import { ScrollText } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
+import { ErrorState } from "@/components/error-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -51,7 +53,7 @@ function LogsInner() {
   const params = useSearchParams();
   const [selected, setSelected] = useState<string | null>(params.get("run"));
   const [type, setType] = useState("");
-  const { data } = useSWR<Paginated<AgentRun>>(`/agent/runs?page_size=50${type ? `&run_type=${type}` : ""}`, fetcher, { refreshInterval: 10000 });
+  const { data, error, mutate } = useSWR<Paginated<AgentRun>>(`/agent/runs?page_size=50${type ? `&run_type=${type}` : ""}`, fetcher, { refreshInterval: 10000 });
   return (
     <div>
       <PageHeader title="Agent logs" description="An audit trail of every scan, preparation and submission the agent performed." />
@@ -61,12 +63,14 @@ function LogsInner() {
         <option value="prepare">Preparations</option>
         <option value="apply">Submissions</option>
       </Select>
-      {!data?.items.length ? <EmptyState icon={ScrollText} title="No agent runs yet" description="Start a scan from the Overview page." /> : (
+      {error && !data ? <ErrorState error={error} onRetry={() => mutate()} title="Couldn't load the agent's runs" />
+        : !data ? <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-16" />)}</div>
+        : !data.items.length ? <EmptyState icon={ScrollText} title="No agent runs yet" description="Start a scan from the Overview page." /> : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
           <div className="space-y-2">
             {data.items.map((r) => (
               <button key={r.id} onClick={() => setSelected(r.id)}
-                className={cn("flex w-full items-center justify-between border bg-card p-3 text-left text-sm hover:bg-accent/50", selected === r.id && "border-primary ring-1 ring-primary")}>
+                className={cn("rounded-lg flex w-full items-center justify-between border bg-card p-3 text-left text-sm hover:bg-accent/50", selected === r.id && "border-primary ring-1 ring-primary")}>
                 <span className="flex items-center gap-2">
                   <span className={cn("h-2 w-2 rounded-full", r.status === "completed" ? "bg-success" : r.status === "failed" ? "bg-destructive" : "bg-warning")} />
                   <span className="font-medium">{titleCase(r.run_type)}</span>

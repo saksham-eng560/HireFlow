@@ -7,6 +7,7 @@ import {
   ArrowUpRight, BellRing, Building2, CalendarDays, CheckCheck, Clock3, ExternalLink, Mail, MapPin, Plus, Search,
 } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
+import { ErrorState } from "@/components/error-state";
 import { AnimatedNumber, EASE_OUT, Stagger, StaggerItem } from "@/components/motion";
 import { Modal } from "@/components/modal";
 import { PageHeader } from "@/components/page-header";
@@ -143,7 +144,7 @@ function TrackedCard({ app, onChanged }: { app: ApplicationSummary; onChanged: (
   };
 
   return (
-    <article className="group border bg-card p-5 transition-[border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-foreground/60 motion-reduce:hover:translate-y-0">
+    <article className="rounded-xl group border bg-card p-5 transition-[border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-foreground/60 motion-reduce:hover:translate-y-0">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <Link href={`/dashboard/applications/${app.id}`} className="font-semibold hover:text-primary">{job?.role_title}</Link>
@@ -248,7 +249,7 @@ export default function AppliedPage() {
   const [logOpen, setLogOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const statuses = FILTERS.find((f) => f.key === filter)?.statuses;
-  const { data, isLoading, mutate } = useApplications({ applied_by: "me", status: statuses, q, page, page_size: 20, sort: "updated" });
+  const { data, isLoading, error, mutate } = useApplications({ applied_by: "me", status: statuses, q, page, page_size: 20, sort: "updated" });
   const counts = data?.counts || {};
   const sum = (list: ApplicationStatus[]) => list.reduce((n, s) => n + (counts[s] || 0), 0);
   const total = data?.self_applied_total ?? 0;
@@ -306,7 +307,8 @@ export default function AppliedPage() {
 
       <div className="space-y-3">
         {isLoading && Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-[150px]" />)}
-        {!isLoading && !data?.items.length && (
+        {error && !data && <ErrorState error={error} onRetry={() => mutate()} title="Couldn't load what you applied to" />}
+        {data && !data.items.length && (
           <EmptyState icon={CheckCheck} title={total ? "Nothing matches" : "Nothing here yet"}
             description={total ? "Try another filter." : "Applied to a job yourself? Click “I Applied” on it in Swipe Review, Jobs or Applications — or log it here — and the agent tracks it from then on."}
             action={!total && (

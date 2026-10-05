@@ -99,7 +99,7 @@ export function IAppliedButton({ applicationId, onApplied, size = "sm", variant 
 export function SelfAppliedTag({ className }: { className?: string }) {
   return (
     <Link href="/dashboard/applied" onClick={(e) => e.stopPropagation()}
-      className={cn("label-caps inline-flex shrink-0 items-center gap-1 border border-success/60 px-2 py-0.5 text-[10px] text-success hover:bg-success hover:text-success-foreground", className)}>
+      className={cn("rounded-full label-caps inline-flex shrink-0 items-center gap-1 border border-success/60 px-2 py-0.5 text-[10px] text-success hover:bg-success hover:text-success-foreground", className)}>
       <CheckCheck className="h-3 w-3" /> You applied
     </Link>
   );

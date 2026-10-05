@@ -114,7 +114,8 @@ export const SwipeCard = forwardRef<SwipeCardHandle, {
         </div>
       </header>
 
-      <div className="flex-1 space-y-5 overflow-y-auto p-5 scrollbar-thin sm:p-6">
+      {/* pan-y here too: this is its own scroll container, and touch-action stops at it (else the browser claims sideways swipes) */}
+      <div className="flex-1 touch-pan-y space-y-5 overflow-y-auto p-5 scrollbar-thin sm:p-6">
         <div className="flex flex-wrap gap-1.5">
           <FocusBadges card={card} />
           {job.job_type && <Badge tone="outline">{titleCase(job.job_type)}</Badge>}
@@ -124,7 +125,7 @@ export const SwipeCard = forwardRef<SwipeCardHandle, {
         </div>
 
         {card.heads_up.length > 0 && (
-          <div className="flex items-start gap-2 border border-warning/50 bg-warning/10 p-3 text-sm">
+          <div className="rounded-lg flex items-start gap-2 border border-warning/50 bg-warning/10 p-3 text-sm">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
             <span>{card.heads_up.join(" · ")}</span>
           </div>
@@ -207,7 +208,7 @@ function FocusBadges({ card }: { card: ReviewCard }) {
 export function DeckShadowCard({ card, depth }: { card: ReviewCard; depth: number }) {
   return (
     <div aria-hidden
-      className="absolute inset-0 flex flex-col border border-line bg-card p-6 transition-transform duration-300"
+      className="rounded-2xl absolute inset-0 flex flex-col border border-line bg-card p-6 transition-transform duration-300"
       style={{ transform: `translateY(${depth * 24}px) scale(${1 - depth * 0.035})`, zIndex: -depth, opacity: 1 - depth * 0.3 }}>
       <p className="label-caps text-[10px] text-muted-foreground">{card.job.company_name}</p>
       <p className="display mt-3 line-clamp-2 text-xl text-foreground/60">{card.job.role_title}</p>

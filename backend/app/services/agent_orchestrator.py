@@ -35,14 +35,14 @@ from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
 
-from sqlalchemy import func, inspect, or_, select
+from sqlalchemy import func, inspect, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.core.database import checkpoint
 from app.core.storage import get_storage, user_prefix
 from app.models.agent_run import AgentRun
-from app.models.application import Application
+from app.models.application import Application, ApplicationStatusHistory
 from app.models.enums import STATUS_RANK, ApplicationStatus, ATSPlatform
 from app.models.job import Job
 from app.models.resume import Resume
@@ -797,6 +797,57 @@ def resume_everything(db: Session, user: User) -> None:
         enqueue("prepare_application", str(app.id), after_commit=db)
 
 
+# --------------------------------------------------------------------------- stalled preparations
+# A kept job is "preparing" while its task runs. If the worker or the server restarts mid-way (in local mode
+# the tasks run in the API's own threads) the task is gone and the job would wait forever. Every step of a
+# preparation saves progress (and so moves updated_at), and no single step takes this long:
+STALLED_AFTER = timedelta(minutes=45)
+MAX_PREPARE_RESTARTS = 2
+RESTART_NOTE = "Preparation restarted after an interruption"
+
+
+def requeue_stalled_preparations(db: Session, now: datetime | None = None) -> list[str]:
+    """Kept jobs stuck in "preparing": start their preparation again (at most twice, then they're marked
+    failed with a reason). Each is claimed atomically, so two sweeps never restart the same one. Returns the
+    application ids to enqueue."""
+    now = now or datetime.now(UTC)
+    cutoff = now - STALLED_AFTER
+    paused = select(User.id).where(User.automation_paused_at.is_not(None))
+    stalled = db.scalars(
+        select(Application).where(Application.status == ApplicationStatus.PREPARING, Application.updated_at < cutoff,
+                                  Application.user_id.not_in(paused),
+                                  or_(Application.notes.is_(None), Application.notes != PAUSED_NOTE))
+        .order_by(Application.updated_at).limit(100)
+    ).all()
+    restart = []
+    for app in stalled:
+        claimed = db.execute(
+            update(Application).where(Application.id == app.id, Application.status == ApplicationStatus.PREPARING,
+                                      Application.updated_at < cutoff)
+            .values(updated_at=now).execution_options(synchronize_session=False)
+        ).rowcount == 1
+        if not claimed:
+            continue
+        db.refresh(app)
+        restarts = db.scalar(select(func.count()).select_from(ApplicationStatusHistory).where(
+            ApplicationStatusHistory.application_id == app.id, ApplicationStatusHistory.notes == RESTART_NOTE)) or 0
+        if restarts >= MAX_PREPARE_RESTARTS:
+            app.error_log = f"Preparation was interrupted {restarts + 1} times and didn't finish."
+            app.needs_manual_review = True
+            app.manual_review_reason = ("Preparation kept getting interrupted. Press “Re-fill form” to try again, or "
+                                        "apply yourself and click “I Applied”.")
+            set_status(db, app, ApplicationStatus.FAILED, "agent", "Preparation kept getting interrupted")
+            notify(db, db.get(User, app.user_id), "agent_error", f"Could not prepare {app.job.company_name} application",
+                   app.manual_review_reason, link=f"/dashboard/applications/{app.id}")
+            continue
+        db.add(ApplicationStatusHistory(application_id=app.id, old_status=ApplicationStatus.PREPARING,
+                                        new_status=ApplicationStatus.PREPARING, changed_by="agent", notes=RESTART_NOTE))
+        restart.append(str(app.id))
+    if restart:
+        logger.info("Restarting %d stalled preparation(s)", len(restart))
+    return restart
+
+
 # --------------------------------------------------------------------------- swipe review
 REVIEWABLE = (ApplicationStatus.DISCOVERED, ApplicationStatus.MATCHED, ApplicationStatus.SKIPPED)
 
@@ -894,6 +945,7 @@ def prepare_application(db: Session, application_id: str, stage: bool | None = N
     if guardrails.is_paused(user):
         app.notes = PAUSED_NOTE  # resuming picks it up again
         return app
+    app.updated_at = datetime.now(UTC)  # work started: a long wait in the queue isn't mistaken for a stall
     run = RunLog(db, user, "prepare", "system")
     run.log(f"Preparing {app.job.role_title} @ {app.job.company_name}")
     try:

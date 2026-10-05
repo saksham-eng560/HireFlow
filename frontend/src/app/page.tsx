@@ -232,7 +232,7 @@ export default function Landing() {
             </div>
             <p className="max-w-md text-muted-foreground">
               Applying for you is only useful if it never embarrasses you. These rules are enforced by the server, not just the UI.{" "}
-              <Link href="/responsible-use" className="text-primary underline-offset-4 hover:underline">Responsible use</Link>
+              <Link href="/responsible-use" className="text-primary underline underline-offset-4">Responsible use</Link>
             </p>
           </div>
           <ul className="grid gap-px border-t border-line/70 bg-line/70 sm:grid-cols-2 lg:grid-cols-4">

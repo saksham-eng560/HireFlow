@@ -43,11 +43,15 @@ def submit_application(application_id: str) -> None:
 
 @register("send_due_applications")
 def send_due_applications() -> int:
-    """Every minute: send held applications whose time has come ("Sending soon", daily / company limits)."""
+    """Every minute: send held applications whose time has come ("Sending soon", daily / company limits), and
+    restart preparations a restart interrupted. Returns how many were sent."""
     with session_scope() as db:
         claimed = guardrails.claim_due(db)
+        stalled = orch.requeue_stalled_preparations(db)
     for application_id in claimed:  # claimed and committed first, so no other sweep sends them too
         enqueue("submit_application", application_id)
+    for application_id in stalled:
+        enqueue("prepare_application", application_id)
     return len(claimed)
 
 

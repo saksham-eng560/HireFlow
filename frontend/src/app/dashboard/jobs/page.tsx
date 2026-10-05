@@ -6,6 +6,7 @@ import useSWR from "swr";
 import { Briefcase, Building2, ExternalLink, Link2, MapPin, Plus, RefreshCw, Search, Wand2 } from "lucide-react";
 import { CompanyBadge, CompanyTag } from "@/components/company-badge";
 import { EmptyState } from "@/components/empty-state";
+import { ErrorState } from "@/components/error-state";
 import { IAppliedButton, canSelfApply } from "@/components/i-applied-button";
 import { Stagger, StaggerItem } from "@/components/motion";
 import { JobMatchBadge } from "@/components/job-match-badge";
@@ -133,7 +134,7 @@ export default function JobsPage() {
   if (platform) params.set("platform", platform);
   if (remote) params.set("remote", remote);
   if (minScore) params.set("min_score", minScore);
-  const { data, isLoading, mutate } = useSWR<Paginated<Job>>(`/jobs?${params}`, fetcher, { keepPreviousData: true });
+  const { data, isLoading, error, mutate } = useSWR<Paginated<Job>>(`/jobs?${params}`, fetcher, { keepPreviousData: true });
 
   return (
     <div>
@@ -171,7 +172,8 @@ export default function JobsPage() {
 
       <div className="overflow-hidden border bg-card">
         {isLoading && <div className="space-y-2 p-4">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-14" />)}</div>}
-        {!isLoading && !data?.items.length && (
+        {error && !data && <div className="p-6"><ErrorState error={error} onRetry={() => mutate()} title="Couldn't load jobs" /></div>}
+        {data && !data.items.length && (
           <div className="p-6"><EmptyState icon={Briefcase} title="No jobs yet" description="Configure your job sources in Settings, then run a scan from the Overview page — or add a job by URL."
             action={<Button variant="outline" onClick={() => setImportOpen(true)}><Link2 /> Add job by URL</Button>} /></div>
         )}

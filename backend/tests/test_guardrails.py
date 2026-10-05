@@ -13,6 +13,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import update
 
 from app.config import settings
 from app.core.database import SessionLocal
@@ -315,3 +316,72 @@ def test_normalize_url() -> None:
     assert guardrails.normalize_url("https://Jobs.Lever.co/acme/123/?utm_source=x#apply") == "jobs.lever.co/acme/123"
     assert guardrails.normalize_url("http://www.acme.com/careers/9") == "acme.com/careers/9"
     assert guardrails.normalize_url(None) == "" and guardrails.normalize_url("not a url") == ""
+
+
+# --------------------------------------------------------------------------- interrupted preparations
+def _stall(app_id: str, minutes: int = 50) -> None:
+    """As if the task preparing it died with the server `minutes` ago (nothing has touched it since)."""
+    with SessionLocal() as db:
+        db.execute(update(Application).where(Application.id == uuid.UUID(app_id))
+                   .values(updated_at=datetime.now(UTC) - timedelta(minutes=minutes)))
+        db.commit()
+
+
+@pytest.fixture
+def queued(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, ...]]:
+    tasks: list[tuple[str, ...]] = []
+    monkeypatch.setattr("app.worker.tasks_apply.enqueue", lambda name, *args, **_: tasks.append((name, *args)))
+    return tasks
+
+
+def test_a_preparation_cut_off_by_a_restart_starts_again(auth_client: TestClient, queued: list) -> None:
+    from app.worker.tasks_apply import send_due_applications
+
+    stalled = _app("Stalled Co", status=ApplicationStatus.PREPARING)
+    busy = _app("Busy Co", status=ApplicationStatus.PREPARING)  # still being prepared: recently touched
+    _stall(stalled)
+    _stall(busy, minutes=10)
+    send_due_applications()
+    assert queued == [("prepare_application", stalled)]
+    send_due_applications()  # the next sweep, a minute later: already restarted, left alone
+    assert queued == [("prepare_application", stalled)]
+    assert [h.notes for h in _get(stalled).history].count(orch.RESTART_NOTE) == 1
+    assert _get(stalled).status == ApplicationStatus.PREPARING
+
+
+def test_paused_preparations_wait_for_resume_instead(auth_client: TestClient, queued: list) -> None:
+    from app.worker.tasks_apply import send_due_applications
+
+    app_id = _app("Paused Co", status=ApplicationStatus.PREPARING)
+    with SessionLocal() as db:
+        db.get(Application, uuid.UUID(app_id)).notes = orch.PAUSED_NOTE
+        db.commit()
+    _stall(app_id)
+    send_due_applications()
+    assert queued == []
+    other = _app("Other Co", status=ApplicationStatus.PREPARING)
+    _stall(other)
+    assert auth_client.post("/api/v1/agent/pause").status_code == 200
+    send_due_applications()
+    assert queued == []  # nothing restarts while you've paused everything
+
+
+def test_after_two_restarts_it_stops_and_tells_you(auth_client: TestClient, queued: list,
+                                                   monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.worker.tasks_apply import send_due_applications
+
+    app_id = _app("Flaky Co", status=ApplicationStatus.PREPARING)
+    for _ in range(orch.MAX_PREPARE_RESTARTS + 1):
+        _stall(app_id)
+        send_due_applications()
+    assert queued == [("prepare_application", app_id)] * orch.MAX_PREPARE_RESTARTS
+    app = _get(app_id)
+    assert app.status == ApplicationStatus.FAILED and app.needs_manual_review
+    assert "Re-fill form" in app.manual_review_reason
+    with SessionLocal() as db:
+        assert db.query(Notification).filter(Notification.title.contains("Flaky Co")).count() == 1
+    # "Re-fill form" on a job that was never prepared runs the whole preparation, not just the form
+    api_tasks: list[tuple[str, ...]] = []
+    monkeypatch.setattr("app.api.applications.enqueue", lambda name, *args, **_: api_tasks.append((name, *args)))
+    assert auth_client.post(f"/api/v1/applications/{app_id}/restage").status_code == 202
+    assert api_tasks == [("prepare_application", app_id)]

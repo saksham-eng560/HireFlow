@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { CompanyBadge } from "@/components/company-badge";
 import { EmptyState } from "@/components/empty-state";
+import { ErrorState } from "@/components/error-state";
 import { IAppliedButton } from "@/components/i-applied-button";
 import { Modal } from "@/components/modal";
 import { EASE_OUT } from "@/components/motion";
@@ -67,7 +68,7 @@ function siteName(item: SubmitQueueItem) {
 }
 
 function Kbd({ children }: { children: React.ReactNode }) {
-  return <kbd className="border px-1.5 py-0.5 font-mono text-[11px] text-foreground">{children}</kbd>;
+  return <kbd className="rounded border px-1.5 py-0.5 font-mono text-[11px] text-foreground">{children}</kbd>;
 }
 
 /** The inline editor a ✗ Fix opens: a dropdown for choices, a text box for long answers, an input otherwise. */
@@ -251,7 +252,7 @@ function SubmitInner() {
   const params = useSearchParams();
   const toast = useToast();
   const reduce = useReducedMotionSafe();
-  const { data, isLoading, mutate } = useSubmitQueue();
+  const { data, isLoading, error, mutate } = useSubmitQueue();
   const { data: status, mutate: refreshStatus } = useAgentStatus();
   const [currentId, setCurrentId] = useState<string | null>(() => params.get("id"));
   const [done, setDone] = useState<Set<string>>(new Set()); // submitted / applied here: gone before the refetch lands
@@ -485,6 +486,10 @@ function SubmitInner() {
       {isLoading ? (
         <div className="mx-auto max-w-[880px] space-y-3">
           <Skeleton className="h-40" /><Skeleton className="h-20" /><Skeleton className="h-20" /><Skeleton className="h-20" />
+        </div>
+      ) : error && !data ? (
+        <div className="mx-auto max-w-[880px]">
+          <ErrorState error={error} onRetry={() => mutate()} title="Couldn't load what's ready to submit" />
         </div>
       ) : !item ? (
         <div className="mx-auto max-w-[880px]">

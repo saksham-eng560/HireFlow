@@ -13,6 +13,7 @@ import { FocusStrip } from "@/components/motion-graphics";
 import { ScanProgressPanel } from "@/components/scan-progress";
 import { useAuthConfig } from "@/components/demo";
 import { EmptyState } from "@/components/empty-state";
+import { ErrorState } from "@/components/error-state";
 import { PageHeader } from "@/components/page-header";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -97,7 +98,7 @@ function SwipeBand({ count, onScan, scanning, disabled }: { count: number; onSca
 export default function OverviewPage() {
   const { data: status } = useAgentStatus();
   const scan = useScan();
-  const { data: overview, isLoading } = useOverview();
+  const { data: overview, isLoading, error: overviewError, mutate: reloadOverview } = useOverview();
   const { data: pending } = useApplications({ status: "pending_approval", page_size: 5, sort: "match" });
   const { data: me } = useMe();
   const running = scan.running;
@@ -123,20 +124,22 @@ export default function OverviewPage() {
       <Onboarding />
       {status && <SwipeBand count={status.to_review} onScan={startScan} scanning={scanning || !!running} disabled={!status.has_master_resume} />}
 
-      <div className="grid border sm:grid-cols-2 sm:[&>:last-child]:col-span-2 xl:grid-cols-5 xl:[&>:last-child]:col-span-1 grid-lines">
+      {overviewError && !totals && <ErrorState error={overviewError} onRetry={() => reloadOverview()} title="Couldn't load your numbers" />}
+      <div className={cn("grid border sm:grid-cols-2 sm:[&>:last-child]:col-span-2 xl:grid-cols-5 xl:[&>:last-child]:col-span-1 grid-lines",
+        overviewError && !totals && "hidden")}>
         {isLoading || !totals ? (
           Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-[132px]" />)
         ) : (
           <>
-            <StatTile className="border-0" label="Awaiting your approval" value={totals.pending_approval} icon={<Hand className="h-4 w-4" />}
+            <StatTile className="rounded-none border-0" label="Awaiting your approval" value={totals.pending_approval} icon={<Hand className="h-4 w-4" />}
               hint={<Link href="/dashboard/applications?status=pending_approval" className="font-semibold text-primary hover:underline">Review now →</Link>} />
-            <StatTile className="border-0" label="Applications sent" value={totals.applied} icon={<Send className="h-4 w-4" />}
+            <StatTile className="rounded-none border-0" label="Applications sent" value={totals.applied} icon={<Send className="h-4 w-4" />}
               hint={`${status?.applied_today ?? 0} of ${status?.daily_limit ?? 25} today`} />
-            <StatTile className="border-0" label="Response rate" value={`${overview.rates.response_rate}%`} icon={<Radar className="h-4 w-4" />}
+            <StatTile className="rounded-none border-0" label="Response rate" value={`${overview.rates.response_rate}%`} icon={<Radar className="h-4 w-4" />}
               hint={overview.rates.avg_days_to_response != null ? `~${overview.rates.avg_days_to_response} days to first reply` : `${totals.responses} responses`} />
-            <StatTile className="border-0" label="Interviews" value={totals.interviews} icon={<CalendarDays className="h-4 w-4" />}
+            <StatTile className="rounded-none border-0" label="Interviews" value={totals.interviews} icon={<CalendarDays className="h-4 w-4" />}
               hint={`${overview.rates.interview_rate}% of applications`} />
-            <StatTile className="border-0" label="Offers" value={totals.offers} icon={<Trophy className="h-4 w-4" />}
+            <StatTile className="rounded-none border-0" label="Offers" value={totals.offers} icon={<Trophy className="h-4 w-4" />}
               hint={`${(totals.preparing || 0) + (status?.approved || 0)} more in the pipeline`} />
           </>
         )}
@@ -185,7 +188,7 @@ export default function OverviewPage() {
           <CardContent className="space-y-2">
             {!overview?.upcoming_interviews.length && <p className="text-sm text-muted-foreground">No interviews scheduled yet.</p>}
             {overview?.upcoming_interviews.map((i) => (
-              <Link key={i.id} href={`/dashboard/interviews?id=${i.id}`} className="group block border p-3 transition-colors hover:border-foreground/60">
+              <Link key={i.id} href={`/dashboard/interviews?id=${i.id}`} className="rounded-lg group block border p-3 transition-colors hover:border-foreground/60">
                 <div className="flex items-center justify-between">
                   <p className="font-semibold">{i.company}</p>
                   <ArrowUpRight className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
@@ -205,7 +208,9 @@ export default function OverviewPage() {
             <CardDescription className="mt-2">Jobs discovered, applications submitted and employer responses per day</CardDescription>
           </CardHeader>
           <CardContent>
-            {overview ? <TimelineChart data={overview.timeline} /> : <Skeleton className="h-[260px]" />}
+            {overview ? <TimelineChart data={overview.timeline} />
+              : overviewError ? <p className="py-24 text-center text-sm text-muted-foreground">Not available right now.</p>
+              : <Skeleton className="h-[260px]" />}
           </CardContent>
         </Card>
         <Card>

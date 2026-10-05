@@ -8,6 +8,7 @@ import {
   Send, ShieldCheck, Sparkles, Undo2, XCircle,
 } from "lucide-react";
 import { ApprovalModal } from "@/components/approval-modal";
+import { ErrorState } from "@/components/error-state";
 import { IAppliedButton, SelfAppliedTag, canSelfApply } from "@/components/i-applied-button";
 import { JobMatchBadge } from "@/components/job-match-badge";
 import { StatusBadge } from "@/components/status-badge";
@@ -41,7 +42,7 @@ const ANSWER_SOURCE: Record<string, string> = {
 
 export default function ApplicationDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { data: app, mutate, isLoading } = useApplication(id);
+  const { data: app, mutate, isLoading, error } = useApplication(id);
   const toast = useToast();
   const [coverLetter, setCoverLetter] = useState("");
   const [answers, setAnswers] = useState<CustomAnswer[]>([]);
@@ -56,6 +57,16 @@ export default function ApplicationDetailPage() {
     }
   }, [app, dirty]);
 
+  if (error && !app) {
+    const missing = error instanceof ApiError && error.status === 404;
+    return (
+      <div className="space-y-4">
+        <Link href="/dashboard/applications" className="text-sm text-muted-foreground hover:text-foreground">← Applications</Link>
+        <ErrorState error={error} onRetry={missing ? undefined : () => mutate()}
+          title={missing ? "This application doesn't exist any more" : "Couldn't load this application"} />
+      </div>
+    );
+  }
   if (isLoading || !app) {
     return <div className="space-y-4"><Skeleton className="h-24" /><Skeleton className="h-96" /></div>;
   }
@@ -148,7 +159,7 @@ export default function ApplicationDetailPage() {
       </div>
 
       {app.status === "preparing" && (
-        <div className="mb-4 flex items-center gap-3 border border-primary/30 bg-primary/5 p-3 text-sm">
+        <div className="rounded-lg mb-4 flex items-center gap-3 border border-primary/30 bg-primary/5 p-3 text-sm">
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           The agent is tailoring your resume, writing the cover letter and filling out the form…
         </div>
@@ -178,7 +189,7 @@ export default function ApplicationDetailPage() {
         </div>
       )}
       {app.needs_manual_review && app.manual_review_reason && reviewable && (
-        <div className="mb-4 flex items-start gap-3 border border-warning/50 bg-warning/10 p-3 text-sm">
+        <div className="rounded-lg mb-4 flex items-start gap-3 border border-warning/50 bg-warning/10 p-3 text-sm">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
           <div className="flex-1">
             <p className="font-medium">Needs your attention</p>
@@ -193,7 +204,7 @@ export default function ApplicationDetailPage() {
         </div>
       )}
       {app.status === "applied" && app.confirmation_number && (
-        <div className="mb-4 flex items-center gap-2 border border-success/40 bg-success/10 p-3 text-sm">
+        <div className="rounded-lg mb-4 flex items-center gap-2 border border-success/40 bg-success/10 p-3 text-sm">
           <CheckCircle2 className="h-4 w-4 text-success" /> Submitted {formatDateTime(app.submitted_at)} · confirmation #{app.confirmation_number}
         </div>
       )}
@@ -291,7 +302,7 @@ export default function ApplicationDetailPage() {
                   <p key={c} className="flex gap-2"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />{c}</p>
                 ))}
                 {!!app.tailored_resume?.changes_made.some((c) => c.startsWith("[guard]")) && (
-                  <div className="mt-4 border border-primary/20 bg-primary/5 p-3">
+                  <div className="rounded-lg mt-4 border border-primary/20 bg-primary/5 p-3">
                     <p className="mb-1 flex items-center gap-1.5 font-medium"><ShieldCheck className="h-4 w-4 text-primary" /> Truthfulness guard</p>
                     <p className="mb-2 text-xs text-muted-foreground">Claims that couldn&apos;t be verified against your master resume were removed:</p>
                     {app.tailored_resume.changes_made.filter((c) => c.startsWith("[guard]")).map((c) => (
@@ -331,7 +342,7 @@ export default function ApplicationDetailPage() {
             <CardContent className="space-y-4">
               {!answers.length && <p className="text-sm text-muted-foreground">This form had no custom questions.</p>}
               {answers.map((a, i) => (
-                <div key={`${a.question}-${i}`} className={cn("border p-3", a.needs_user_review && "border-warning/60 bg-warning/5")}>
+                <div key={`${a.question}-${i}`} className={cn("rounded-lg border p-3", a.needs_user_review && "border-warning/60 bg-warning/5")}>
                   <div className="mb-2 flex items-start justify-between gap-2">
                     <p className="text-sm font-medium">{a.question}{a.required && <span className="text-destructive"> *</span>}</p>
                     <div className="flex shrink-0 gap-1">
@@ -423,13 +434,13 @@ export default function ApplicationDetailPage() {
               <CardContent className="space-y-3 text-sm">
                 {!app.communications.length && !app.interviews.length && <p className="text-muted-foreground">No recruiter contact yet.</p>}
                 {app.interviews.map((i) => (
-                  <Link key={i.id} href={`/dashboard/interviews?id=${i.id}`} className="block border p-3 hover:bg-accent">
+                  <Link key={i.id} href={`/dashboard/interviews?id=${i.id}`} className="rounded-lg block border p-3 hover:bg-accent">
                     <p className="font-medium">{titleCase(i.interview_type || "interview")} · {formatDateTime(i.scheduled_at)}</p>
                     <p className="text-xs text-muted-foreground">{i.meeting_link || i.physical_location}</p>
                   </Link>
                 ))}
                 {app.communications.map((c) => (
-                  <Link key={c.id} href={`/dashboard/emails?id=${c.id}`} className="block border p-3 hover:bg-accent">
+                  <Link key={c.id} href={`/dashboard/emails?id=${c.id}`} className="rounded-lg block border p-3 hover:bg-accent">
                     <div className="flex items-center justify-between gap-2">
                       <p className="truncate font-medium">{c.subject}</p>
                       {c.detected_intent && <Badge tone="info">{titleCase(c.detected_intent)}</Badge>}

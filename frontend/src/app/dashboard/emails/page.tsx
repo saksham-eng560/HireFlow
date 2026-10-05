@@ -6,6 +6,8 @@ import { Suspense, useEffect, useState } from "react";
 import useSWR from "swr";
 import { CheckCircle2, Inbox, Mail, RefreshCw, Reply, Send } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
+import { ErrorState } from "@/components/error-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -70,7 +72,7 @@ function EmailDetail({ id, onChanged }: { id: string; onChanged: () => void }) {
             ))}
           </div>
         )}
-        <div className="prose-pre max-h-72 overflow-y-auto border p-3 text-muted-foreground">{email.body_text}</div>
+        <div className="rounded-lg prose-pre max-h-72 overflow-y-auto border p-3 text-muted-foreground">{email.body_text}</div>
         <div>
           <p className="mb-1.5 flex items-center gap-1.5 text-sm font-medium"><Reply className="h-4 w-4" /> Suggested reply</p>
           <Textarea value={reply} onChange={(e) => setReply(e.target.value)} className="min-h-[140px]" placeholder="No reply needed for this e-mail." />
@@ -105,7 +107,7 @@ function EmailsInner() {
   const query = new URLSearchParams({ page_size: "50" });
   if (intent) query.set("intent", intent);
   if (actionOnly) query.set("action_required", "true");
-  const { data, mutate } = useSWR<Paginated<Communication>>(`/communications?${query}`, fetcher, { refreshInterval: 30000 });
+  const { data, error, mutate } = useSWR<Paginated<Communication>>(`/communications?${query}`, fetcher, { refreshInterval: 30000 });
 
   const checkNow = async () => {
     try {
@@ -129,7 +131,11 @@ function EmailsInner() {
         </Select>
         <Button variant={actionOnly ? "default" : "outline"} onClick={() => setActionOnly((a) => !a)}>Action required</Button>
       </div>
-      {!data?.items.length ? (
+      {error && !data ? (
+        <ErrorState error={error} onRetry={() => mutate()} title="Couldn't load your e-mails" />
+      ) : !data ? (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]"><Skeleton className="h-72" /><Skeleton className="h-72" /></div>
+      ) : !data.items.length ? (
         <EmptyState icon={Inbox} title="No recruiter e-mails yet"
           description={integrations?.google.gmail ? "Replies from companies you applied to will show up here automatically." : "Connect your Google account under Settings → Integrations."} />
       ) : (
@@ -137,7 +143,7 @@ function EmailsInner() {
           <div className="space-y-2">
             {data.items.map((c) => (
               <button key={c.id} onClick={() => setSelected(c.id)}
-                className={cn("block w-full border bg-card p-3 text-left transition-colors hover:bg-accent/50", selected === c.id && "border-primary ring-1 ring-primary")}>
+                className={cn("rounded-lg block w-full border bg-card p-3 text-left transition-colors hover:bg-accent/50", selected === c.id && "border-primary ring-1 ring-primary")}>
                 <div className="flex items-center justify-between gap-2">
                   <p className={cn("truncate text-sm", c.is_action_required && !c.action_taken ? "font-semibold" : "font-medium")}>{c.sender_name || c.sender_email}</p>
                   <span className="shrink-0 text-xs text-muted-foreground">{timeAgo(c.received_at)}</span>
