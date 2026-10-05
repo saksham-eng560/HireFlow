@@ -1070,11 +1070,14 @@ def test_the_bot_only_applies_by_itself_to_verified_companies(auth_client: TestC
     app = _app(app_id)
     assert [c[0] for c in rec.calls] == ["stage"] and app.status == ApplicationStatus.PENDING_APPROVAL
     assert app.manual_review_reason.startswith("Not sent automatically: Acme Labs isn't a verified company")
-    r = auth_client.post(f"/api/v1/applications/{app_id}/bot-apply")
+    with run_inline():
+        r = auth_client.post(f"/api/v1/applications/{app_id}/bot-apply")
     if verdict == "suspicious":
         assert r.status_code == 409 and "possible fraud" in r.json()["detail"] and rec.calls == [("stage", rec.calls[0][1])]
         return
     assert r.status_code == 202, r.text
+    assert [c[0] for c in rec.calls] == ["stage", "stage", "submit"]  # your click: filled again and sent
+    assert _app(app_id).status == ApplicationStatus.APPLIED
 
 
 def test_marking_a_company_legit_sends_what_waited_for_it(auth_client: TestClient, master_resume: dict,

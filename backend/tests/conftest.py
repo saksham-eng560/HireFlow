@@ -47,6 +47,7 @@ from fastapi.testclient import TestClient
 from app.core.database import Base, SessionLocal, create_all, engine
 from app.services.llm import LLMClient, set_llm
 from app.services.rate_limiter import rate_limiter
+from app.worker.dispatch import wait_for_local_tasks
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -89,6 +90,15 @@ def _reset_state() -> Iterator[None]:
     set_llm(LLMClient(providers=[]))  # heuristic mode unless a test injects a fake provider
     yield
     set_llm(None)
+
+
+@pytest.fixture(autouse=True)
+def _finish_background_tasks(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """A task an API call started in a background thread finishes inside its own test, while that test's
+    fakes are still in place: never during the next test, and never against a real site. (It depends on
+    ``monkeypatch`` so it's torn down before the patches are undone.)"""
+    yield
+    wait_for_local_tasks()
 
 
 @pytest.fixture
