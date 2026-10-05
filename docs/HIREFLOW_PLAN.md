@@ -193,44 +193,44 @@ Several of these already exist (Swipe Review, Needs approval for eligibility que
 tokens and cookies). The list below tightens them and fills the gaps.
 
 **5.1 Applying safely**
-- [ ] **New users start with "Submit automatically" off.** They see the first filled forms before anything is sent.
-- [ ] **Server-enforced daily cap** with a hard ceiling (for example 25/day) that the UI can't exceed, plus a per-company cap (1 application per role, at most 3 per company per week).
-- [ ] **Duplicate guard**: never apply twice to the same job URL or to the same company + title.
-- [ ] **Eligibility is never guessed** (already the rule). Add a test for every eligibility field type.
-- [ ] **Global "Pause everything"** switch in the header. It stops scans, preparation and submissions immediately.
-- [ ] **Dry-run mode**: fills the form and takes screenshots but never clicks Submit. It's the default in demo mode.
-- [ ] **Screenshot before submit**, saved on every application as proof of what was sent.
-- [ ] **Undo window**: an auto-submitted application waits 10 minutes in "Sending soon" so you can cancel it.
+- [x] **New users start with "Submit automatically" off.** They see the first filled forms before anything is sent.
+- [x] **Server-enforced daily cap** with a hard ceiling (for example 25/day) that the UI can't exceed, plus a per-company cap (1 application per role, at most 3 per company per week).
+- [x] **Duplicate guard**: never apply twice to the same job URL or to the same company + title.
+- [x] **Eligibility is never guessed** (already the rule). Add a test for every eligibility field type.
+- [x] **Global "Pause everything"** switch in the header. It stops scans, preparation and submissions immediately.
+- [x] **Dry-run mode**: fills the form and takes screenshots but never clicks Submit. It's the default in demo mode.
+- [x] **Screenshot before submit**, saved on every application as proof of what was sent.
+- [x] **Undo window**: an auto-submitted application waits 10 minutes in "Sending soon" so you can cancel it.
 
 **5.2 AI guardrails**
-- [ ] **No fabrication.** A tailored resume may only reorder or reword facts from the original. Add a
+- [x] **No fabrication.** A tailored resume may only reorder or reword facts from the original. Add a
   check that flags any skill, company, date or degree not in the parsed resume, and blocks it.
-- [ ] **Prompt injection.** Job descriptions and web pages are untrusted. Wrap them as data in prompts
+- [x] **Prompt injection.** Job descriptions and web pages are untrusted. Wrap them as data in prompts
   and tell the model to ignore instructions inside them. Strip hidden text. Test with a JD containing "ignore previous instructions".
-- [ ] **Validate output shape**: Pydantic schemas on every LLM response, with a retry on bad output and a safe fallback.
-- [ ] **Cost caps**: at most N LLM calls per user per day, with a visible usage meter. In the demo, cheap models only.
-- [ ] **Generated answers shown before submit**, editable and marked "AI-written".
+- [x] **Validate output shape**: Pydantic schemas on every LLM response, with a retry on bad output and a safe fallback.
+- [x] **Cost caps**: at most N LLM calls per user per day, with a visible usage meter. In the demo, cheap models only.
+- [x] **Generated answers shown before submit**, editable and marked "AI-written".
 
 **5.3 Security and privacy**
-- [ ] Refuse to start in production with the default `SECRET_KEY` (already the case) or a missing `ENCRYPTION_KEY`.
-- [ ] `COOKIE_SECURE=true` and HTTPS only in production; check CSRF on cookie-auth routes.
-- [ ] Uploads: check the size limit, the real file type (magic bytes, not just the extension) and filenames; serve files only to their owner.
-- [ ] Rate limits on login, register, upload and scan endpoints (stricter than the 300/min default).
-- [ ] Keep PII out of logs: mask emails, phone numbers and tokens.
-- [ ] **Download my data** (JSON + files) and **Delete my account** (cascades all rows and files).
-- [ ] An activity log page: every scan, fill and submission with a timestamp (from `agent_run`).
-- [ ] Dependency and secret scanning in CI (`pip-audit`, `npm audit --omit=dev`, gitleaks).
+- [x] Refuse to start in production with the default `SECRET_KEY` (already the case) or a missing `ENCRYPTION_KEY`.
+- [x] `COOKIE_SECURE=true` and HTTPS only in production; check CSRF on cookie-auth routes.
+- [x] Uploads: check the size limit, the real file type (magic bytes, not just the extension) and filenames; serve files only to their owner.
+- [x] Rate limits on login, register, upload and scan endpoints (stricter than the 300/min default).
+- [x] Keep PII out of logs: mask emails, phone numbers and tokens.
+- [x] **Download my data** (JSON + files) and **Delete my account** (cascades all rows and files).
+- [x] An activity log page: every scan, fill and submission with a timestamp (from `agent_run`).
+- [x] Dependency and secret scanning in CI (`pip-audit`, `npm audit --omit=dev`, gitleaks).
 
 **5.4 Platform rules and responsible use**
-- [ ] Sources that forbid automation (LinkedIn, Internshala, Indeed, Glassdoor) stay **off by default**
+- [x] Sources that forbid automation (LinkedIn, Internshala, Indeed, Glassdoor) stay **off by default**
   and **opt-in with a terms warning and a stored consent**. The public demo never uses them.
-- [ ] Respect per-site rate limits and back off on 429 or captcha.
-- [ ] Pages: `/privacy`, `/terms`, `/responsible-use` (what it does, what it won't do, the risks).
+- [x] Respect per-site rate limits and back off on 429 or captcha.
+- [x] Pages: `/privacy`, `/terms`, `/responsible-use` (what it does, what it won't do, the risks).
 
 **5.5 Demo-mode guardrails** (`DEMO_MODE=true`)
-- [ ] Real submissions, real job-site logins and Gmail sending are off. Applications go to the bundled demo careers site.
-- [ ] A seeded demo account with a "Try the demo" one-click login; the data resets every night.
-- [ ] Demo users can't change passwords or connect accounts; a banner says "Demo — nothing is really sent".
+- [x] Real submissions, real job-site logins and Gmail sending are off. Applications go to the bundled demo careers site.
+- [x] A seeded demo account with a "Try the demo" one-click login; the data resets every night.
+- [x] Demo users can't change passwords or connect accounts; a banner says "Demo — nothing is really sent".
 
 ---
 
@@ -310,15 +310,28 @@ smoke test → link it from the README and landing page.
 
 ### 9. Phases and checklist
 
-| Phase | Work | Rough time |
-|---|---|---|
-| 1 | Rename to HireFlow (section 2) | 0.5–1 day |
-| 2 | Blue and white theme (section 3) | 1 day |
-| 3 | Onboarding: backend + frontend + tests (section 4) | 3–4 days |
-| 4 | Guardrails (section 5) | 2–3 days |
-| 5 | Landing page, README, architecture doc, polish (section 6) | 2 days |
-| 6 | Demo deployment (section 7) | 1–2 days |
-| 7 | Measure numbers, record the video, update resume (section 8) | 1 day |
+| Phase | Work | Rough time | Status |
+|---|---|---|---|
+| 1 | Rename to HireFlow (section 2) | 0.5–1 day | ✓ Done |
+| 2 | Blue and white theme (section 3) | 1 day | ✓ Done |
+| 3 | Onboarding: backend + frontend + tests (section 4) | 3–4 days | ✓ Done |
+| 4 | Guardrails (section 5) | 2–3 days | ✓ Done |
+| 5 | Landing page, README, architecture doc, polish (section 6) | 2 days | ✓ Done |
+| 6 | Demo deployment (section 7) | 1–2 days | ✓ Configs, smoke test and [DEPLOY.md](DEPLOY.md) ready; creating the accounts and deploying is yours |
+| 7 | Measure numbers, record the video, update resume (section 8) | 1 day | ✓ Measured (below); the video and the resume entry are yours |
+
+**Measured** with `scripts/metrics.py` (see [TESTING.md](TESTING.md#the-numbers)), for the resume entry in section 8:
+
+| Number | Measured |
+|---|---|
+| Tests | 432 backend (pytest) + 9 end-to-end (Playwright, through the real dashboard); 80% backend coverage |
+| Time from sign-up to the first swipe deck | 0.9 s of server time; about 5 s through the UI (e2e) |
+| Jobs per scan and scan time (demo careers site) | 12 postings found and all 12 in the deck, in 0.3 s |
+| Form-fill success (demo careers site, Chromium, dry run) | 12 of 12 forms, 100% of fields, every required field |
+| Time per kept job (tailor, cover letter, fill) | about 2 s median |
+
+Per-ATS fill rates on real Greenhouse, Lever, Ashby and Workday postings, and jobs per scan on real sources, come
+from real use: run `scripts/metrics.py --from-db "$DATABASE_URL"` against your own deployment.
 
 Each phase is its own branch and PR, with CI green before merging.
 

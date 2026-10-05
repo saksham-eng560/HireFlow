@@ -46,10 +46,10 @@ throwaway database in demo mode with no AI keys, so anyone can reproduce it:
 | Metric | Measured |
 |---|---|
 | Sign-up to first Swipe Review deck | under 1 s of server time; about 5 s through the UI in the Playwright test |
-| First scan of the demo careers site | 12 postings found and in the deck in about 0.2 s |
+| First scan of the demo careers site | 12 postings found and in the deck in about 0.3 s |
 | Forms filled on the demo careers site (Chromium, dry run) | 12 of 12, every required field filled |
 | Time per kept job (tailor, cover letter, fill) | about 2 s median |
-| Tests | 426 backend (pytest) + 8 end-to-end (Playwright) |
+| Tests | 432 backend (pytest) + 9 end-to-end (Playwright) |
 | Backend coverage | 80% of `app/` (`--coverage`) |
 
 Fill rates on real Greenhouse, Lever, Ashby and Workday postings can only come from real use:

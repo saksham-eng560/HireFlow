@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/saksham-eng560/HireFlow/actions/workflows/ci.yml"><img src="https://github.com/saksham-eng560/HireFlow/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <a href="docs/TESTING.md"><img src="https://img.shields.io/badge/tests-426%20backend%20%2B%208%20e2e-2563EB" alt="Tests" /></a>
+  <a href="docs/TESTING.md"><img src="https://img.shields.io/badge/tests-432%20backend%20%2B%209%20e2e-2563EB" alt="Tests" /></a>
   <a href="docs/TESTING.md"><img src="https://img.shields.io/badge/coverage-80%25-2563EB" alt="Coverage" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2563EB" alt="MIT license" /></a>
   <!-- After deploying (docs/DEPLOY.md), point this badge at the live demo's URL. -->
@@ -128,8 +128,8 @@ make lint        # ruff, ESLint, TypeScript, colour contrast
 make metrics     # measure the numbers below
 ```
 
-Measured with `scripts/metrics.py`, not guessed: **426 backend tests (80% coverage) and 8 end-to-end tests**; on the demo
-careers site the first scan takes about 0.2 s, sign-up to the first Swipe Review deck takes under a second of
+Measured with `scripts/metrics.py`, not guessed: **432 backend tests (80% coverage) and 9 end-to-end tests**; on the demo
+careers site the first scan takes about 0.3 s, sign-up to the first Swipe Review deck takes under a second of
 server time (about 5 s through the UI), and 12 of 12 forms are filled in Chromium with every required field.
 CI runs all of it plus migrations, security audits and Docker builds: [docs/TESTING.md](docs/TESTING.md).
 
