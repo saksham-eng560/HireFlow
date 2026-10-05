@@ -9,28 +9,11 @@ deck from the bundled demo careers site, keeps a job, and finds its form filled 
 
 from __future__ import annotations
 
-import os
 import time
 import uuid
-from collections.abc import Iterator
 
-import pytest
-from playwright.sync_api import Page, expect, sync_playwright
-
-BASE = os.environ.get("E2E_BASE_URL", "http://localhost:3000").rstrip("/")
-
-
-@pytest.fixture
-def page() -> Iterator[Page]:
-    with sync_playwright() as p:
-        browser = p.chromium.launch()
-        context = browser.new_context(viewport={"width": 1440, "height": 900}, reduced_motion="reduce")
-        page = context.new_page()
-        errors: list[str] = []
-        page.on("pageerror", lambda exc: errors.append(str(exc)))
-        yield page
-        browser.close()
-        assert errors == [], f"errors in the page: {errors}"
+from conftest import BASE
+from playwright.sync_api import Page, expect
 
 
 def test_sign_up_onboard_scan_swipe_and_fill(page: Page) -> None:

@@ -38,11 +38,11 @@ export function PipelineMotion({ className }: { className?: string }) {
         {STATIONS.map((name, i) => (
           <span key={name} className="relative mx-auto flex h-6 w-6 items-center justify-center rounded-xl border bg-card shadow-sm" aria-hidden>
             {!reduce && (
-              <motion.span className="absolute inset-0 bg-primary" initial={{ opacity: 0 }}
+              <motion.span className="absolute inset-0 rounded-[inherit] bg-primary" initial={{ opacity: 0 }}
                 animate={{ opacity: [0, 1, 0] }}
                 transition={{ duration: 0.9, repeat: Infinity, repeatDelay: gap - 0.9, delay: (i / (STATIONS.length - 1)) * LOOP * 0.86 }} />
             )}
-            {reduce && i === STATIONS.length - 1 && <span className="absolute inset-0 bg-primary" />}
+            {reduce && i === STATIONS.length - 1 && <span className="absolute inset-0 rounded-[inherit] bg-primary" />}
           </span>
         ))}
       </div>
@@ -53,7 +53,7 @@ export function PipelineMotion({ className }: { className?: string }) {
       <div className="relative mt-8 h-16 overflow-hidden" aria-hidden>
         {CHIPS.map((chip, i) => (
           <motion.div key={chip.role}
-            className="absolute top-2 flex w-40 flex-col border border-foreground/60 bg-background px-3 py-2 shadow-lg"
+            className="absolute top-2 flex w-40 flex-col rounded-lg border border-foreground/30 bg-background px-3 py-2 shadow-lg"
             style={reduce ? { left: `${6 + i * 32}%` } : undefined}
             initial={reduce ? false : { left: "-22%", opacity: 0 }}
             animate={reduce ? undefined : { left: ["-22%", "4%", "84%", "104%"], opacity: [0, 1, 1, 0] }}

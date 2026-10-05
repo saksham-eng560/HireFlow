@@ -3,7 +3,8 @@
 #  HireFlow — one command to set up and run everything.
 #
 #    ./start.sh              local mode: no Docker needed (SQLite; Redis + Celery if installed)
-#    ./start.sh --demo       also seed a demo account and serve the demo careers site on :8765
+#    ./start.sh --demo       the public demo: "Try the demo" one-click login, fictional jobs, nothing really sent
+#    ./start.sh --sample     also seed a sample account and serve the standalone demo careers site on :8765
 #    ./start.sh --docker     full stack in Docker Compose (PostgreSQL, Redis, worker, beat)
 #    ./start.sh --stop       stop the Docker stack
 #    ./start.sh --prod       local mode with a production build of the dashboard (faster pages)
@@ -19,7 +20,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 
-MODE="local"; DEMO=0; PROD=0; RESET=0; OPEN_BROWSER=1; OLLAMA=0
+MODE="local"; DEMO=0; SAMPLE=0; PROD=0; RESET=0; OPEN_BROWSER=1; OLLAMA=0
 API_PORT="${API_PORT:-8000}"; WEB_PORT="${WEB_PORT:-3000}"; DEMO_PORT="${DEMO_PORT:-8765}"
 LOG_DIR="$ROOT/logs"
 
@@ -33,13 +34,14 @@ ok()   { printf '%s\n' "${GREEN}✓${RESET_C} $*"; }
 warn() { printf '%s\n' "${YELLOW}!${RESET_C} $*"; }
 die()  { printf '%s\n' "${RED}✗ $*${RESET_C}" >&2; exit 1; }
 
-usage() { sed -n '3,16p' "$0" | sed 's/^#  \{0,1\}//'; exit 0; }
+usage() { sed -n '3,17p' "$0" | sed 's/^#  \{0,1\}//'; exit 0; }
 
 for arg in "$@"; do
   case "$arg" in
     --docker) MODE="docker" ;;
     --stop) MODE="stop" ;;
     --demo) DEMO=1 ;;
+    --sample) SAMPLE=1 ;;
     --prod) PROD=1 ;;
     --reset) RESET=1 ;;
     --ollama) OLLAMA=1 ;;
@@ -251,8 +253,9 @@ if [ "$MODE" = "docker" ]; then
     setup_ollama  # the containers reach this computer's Ollama at host.docker.internal
   fi
   say "Building and starting the stack (first build takes a few minutes)…"
+  if [ "$DEMO" = 1 ]; then export DEMO_MODE=true; fi
   docker compose up --build -d
-  if [ "$DEMO" = 1 ]; then
+  if [ "$SAMPLE" = 1 ]; then
     wait_for "http://127.0.0.1:$API_PORT/health" 180 "API" || die "API did not start — see: docker compose logs api"
     docker compose exec -T api python scripts/seed_db.py || true
   fi
@@ -398,7 +401,11 @@ except Exception: print(0)' "$ROOT/backend/data/hireflow.db" 2>/dev/null || echo
 fi
 
 if [ "$DEMO" = 1 ]; then
-  "$PY" scripts/seed_db.py >"$LOG_DIR/seed.log" 2>&1 && ok "Demo account: demo@example.com / demo-password-123" || warn "Seeding skipped (see logs/seed.log)"
+  export DEMO_MODE=true  # the API seeds the shared demo account on start-up
+  ok "Demo mode: press \"Try the demo\" on the home page. Applications go to fictional companies; nothing is really sent."
+fi
+if [ "$SAMPLE" = 1 ]; then
+  "$PY" scripts/seed_db.py >"$LOG_DIR/seed.log" 2>&1 && ok "Sample account: demo@example.com / demo-password-123" || warn "Seeding skipped (see logs/seed.log)"
   run_bg demo-site "$ROOT" "$PY" scripts/demo_site.py --port "$DEMO_PORT"
 fi
 
@@ -427,7 +434,8 @@ wait_for "http://127.0.0.1:$WEB_PORT/api/health" 180 "Dashboard" || { tail -n 40
 printf '\n'
 printf '  %s  %s\n' "${BOLD}Dashboard${RESET_C}" "http://localhost:$WEB_PORT"
 printf '  %s   %s\n' "${BOLD}API docs${RESET_C}" "http://localhost:$API_PORT/docs"
-[ "$DEMO" = 1 ] && printf '  %s  %s\n' "${BOLD}Demo site${RESET_C}" "http://localhost:$DEMO_PORT/careers"
+[ "$DEMO" = 1 ] && printf '  %s  %s\n' "${BOLD}Demo site${RESET_C}" "http://localhost:$API_PORT/api/v1/demo-careers"
+[ "$SAMPLE" = 1 ] && printf '  %s  %s\n' "${BOLD}Sample site${RESET_C}" "http://localhost:$DEMO_PORT/careers"
 printf '  %s     %s\n' "${BOLD}Queue${RESET_C}" "$QUEUE_NOTE"
 printf '  %s      %s\n\n' "${BOLD}Logs${RESET_C}" "logs/*.log"
 printf '%s\n' "${DIM}  First time? Create your account → upload your resume → Settings › Mass apply › Internships"

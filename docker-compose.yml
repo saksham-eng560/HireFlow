@@ -23,6 +23,10 @@ x-backend: &backend
     FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
     PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8000}
     CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+    # The public demo (./start.sh --docker --demo, or DEMO_MODE=true in .env). The worker's browser reaches
+    # the bundled demo careers site through the api container, not localhost.
+    DEMO_MODE: ${DEMO_MODE:-false}
+    DEMO_SITE_URL: ${DEMO_SITE_URL:-http://api:8000/api/v1/demo-careers}
   volumes:
     - storage:/data
   extra_hosts:

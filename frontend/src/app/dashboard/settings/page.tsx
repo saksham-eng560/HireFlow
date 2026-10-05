@@ -34,8 +34,8 @@ const pill = (on: boolean) => cn("rounded-full border px-3 py-1 text-sm transiti
 const PRESETS = [
   { name: "ai-engineer", title: "AI engineer · Python", text: "From your resume: AI engineer, generative AI, LLM and Python / FastAPI internships, plus big tech software internships. Java, Spring Boot and data-science / analyst roles are left out. Only changes what you look for." },
   { name: "india-internships", title: "India · Summer 2027", text: "Internships only, ~90% in India with Delhi NCR first: Internshala, LinkedIn India and Indeed India, plus the Summer 2027 lists." },
-  { name: "internships", title: "Internships", text: "Intern roles, 4,000+ curated listings (SimplifyJobs, vanshb03) plus 110 startup boards, 100 applications/day." },
-  { name: "startups", title: "Startups", text: "Adds 110 startup Greenhouse, Ashby and Lever boards to your sources, keeps your roles and job types." },
+  { name: "internships", title: "Internships", text: "Intern roles, the curated SimplifyJobs and vanshb03 lists plus 107 startup boards, and the daily limit at the server's cap (25)." },
+  { name: "startups", title: "Startups", text: "Adds 107 startup Greenhouse, Ashby and Lever boards to your sources, keeps your roles and job types." },
   { name: "new-grad", title: "New grad", text: "Entry-level full-time roles from the SimplifyJobs new-grad list plus the startup boards. Turns “Internships only” off." },
 ] as const;
 
