@@ -21,6 +21,14 @@ DEFAULT_OLLAMA_MODEL = "qwen3.5:4b"  # used when LLM_PROVIDER=ollama and OLLAMA_
 LLM_PROVIDERS = ("auto", "anthropic", "openai", "ollama")
 
 
+def _redis_tls(url: str | None) -> str | None:
+    """Celery refuses a TLS Redis URL (``rediss://``, e.g. Upstash) that doesn't say how to check the
+    certificate: verify it, unless the URL already says otherwise."""
+    if url and url.startswith("rediss://") and "ssl_cert_reqs=" not in url:
+        return f"{url}{'&' if '?' in url else '?'}ssl_cert_reqs=required"
+    return url
+
+
 def _csv(value: str | None) -> list[str]:
     if not value:
         return []
@@ -174,6 +182,8 @@ class Settings(BaseSettings):
 
     # ---- Monitoring ----
     SENTRY_DSN: str | None = None
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.1
+    SENTRY_RELEASE: str | None = None  # defaults to the deployed commit on Render (RENDER_GIT_COMMIT)
 
     # ---- Paths ----
     PROMPTS_DIR: str = Field(default_factory=lambda: str(REPO_ROOT / "prompts"))
@@ -189,6 +199,16 @@ class Settings(BaseSettings):
                 return default
         return value
 
+    @field_validator("DATABASE_URL", mode="after")
+    @classmethod
+    def _psycopg_driver(cls, value: str) -> str:
+        # Hosted Postgres (Neon, Supabase, Render, Heroku) hands out postgres:// or postgresql:// URLs, which
+        # SQLAlchemy would open with psycopg2; HireFlow ships psycopg 3.
+        for prefix in ("postgres://", "postgresql://"):
+            if value.startswith(prefix):
+                return "postgresql+psycopg://" + value[len(prefix):]
+        return value
+
     # ---------------------------------------------------------------- helpers
     @property
     def cors_origins(self) -> list[str]:
@@ -200,11 +220,11 @@ class Settings(BaseSettings):
 
     @property
     def celery_broker(self) -> str:
-        return self.CELERY_BROKER_URL or self.REDIS_URL or "memory://"
+        return _redis_tls(self.CELERY_BROKER_URL or self.REDIS_URL) or "memory://"
 
     @property
     def celery_backend(self) -> str | None:
-        return self.CELERY_RESULT_BACKEND or self.REDIS_URL
+        return _redis_tls(self.CELERY_RESULT_BACKEND or self.REDIS_URL)
 
     @property
     def google_redirect_uri(self) -> str:

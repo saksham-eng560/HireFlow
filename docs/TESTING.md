@@ -34,7 +34,9 @@ against saved fixtures, and real-browser tests:
   `robots.txt` and `sitemap.xml`;
 - Swipe Review on a phone: a real touch swipe keeps, the left arrow skips, nothing scrolls sideways;
 - accessibility: axe-core finds no serious or critical problems on the public pages and every dashboard
-  page, in the light and the dark theme.
+  page, in the light and the dark theme;
+- the deployment smoke test (`scripts/smoke_test.py`, see [DEPLOY.md](DEPLOY.md#7-smoke-test-and-uptime))
+  passes against these servers, so it's known to work before it's pointed at a real deployment.
 
 ## The numbers
 
@@ -63,5 +65,7 @@ found per scan and scan time.
 - **Dashboard**: ESLint, `tsc --noEmit`, a WCAG AA colour-contrast check of the theme tokens, `next build`.
 - **Security**: `pip-audit`, `npm audit --omit=dev` and gitleaks over the code and its history.
 - **End to end**: the Playwright tests above, against a fresh demo-mode API and the production build.
+- **Smoke test** ([`smoke.yml`](../.github/workflows/smoke.yml)): the live demo, daily and after each deploy,
+  once `DEMO_SITE_URL` is set.
 - **Extension**: manifest and script validation, packaging.
 - **Docker**: both images build, and the backend image launches Chromium.

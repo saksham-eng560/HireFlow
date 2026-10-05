@@ -42,7 +42,7 @@ done
 curl -sf "http://localhost:$WEB_PORT/api/health" >/dev/null || { echo "servers didn't start"; tail -n 40 "$LOGS/api.log" "$LOGS/web.log"; exit 1; }
 
 status=0
-E2E_BASE_URL="http://localhost:$WEB_PORT" "$PYTHON" -m pytest "$ROOT/e2e" -q -s -p no:cacheprovider --rootdir "$ROOT/e2e" || status=$?
+E2E_BASE_URL="http://localhost:$WEB_PORT" E2E_API_URL="http://localhost:$API_PORT" "$PYTHON" -m pytest "$ROOT/e2e" -q -s -p no:cacheprovider --rootdir "$ROOT/e2e" || status=$?
 if [ "$status" -ne 0 ]; then
   echo "---- API log ----"; tail -n 60 "$LOGS/api.log"
   echo "---- dashboard log ----"; tail -n 20 "$LOGS/web.log"
