@@ -84,11 +84,17 @@ def wait_until_ready(api: Any, space_id: str, url: str, timeout: float) -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--frontend-url", required=True, help="the dashboard's public URL (Vercel)")
+    parser.add_argument("--frontend-url", default="", help="the dashboard's public URL (Vercel); required to deploy")
     parser.add_argument("--space", default="", help="owner/name (default: <your Hugging Face user>/hireflow)")
     parser.add_argument("--timeout", type=float, default=1800, help="seconds to wait for the build (default 1800)")
     parser.add_argument("--dry-run", action="store_true", help="only list the files that would be uploaded")
+    parser.add_argument("--bundle-dir", type=Path, help="only lay the Space's files out here (CI builds the image from it)")
     args = parser.parse_args()
+
+    if args.bundle_dir:
+        args.bundle_dir.mkdir(parents=True, exist_ok=False)
+        print(f"{len(build_bundle(args.bundle_dir))} files in {args.bundle_dir}")
+        return 0
 
     if args.dry_run:
         with tempfile.TemporaryDirectory() as tmp:
@@ -97,6 +103,8 @@ def main() -> int:
         print(f"{len(files)} files")
         return 0
 
+    if not args.frontend_url:
+        parser.error("--frontend-url is required to deploy")
     from huggingface_hub import HfApi
 
     token = os.environ.get("HF_TOKEN", "")
