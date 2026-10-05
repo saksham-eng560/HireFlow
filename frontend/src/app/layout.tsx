@@ -4,7 +4,7 @@ import { MotionProvider } from "@/components/motion-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ToastProvider } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { OPEN_GRAPH, SITE_DESCRIPTION, SITE_TITLE, SITE_URL } from "@/lib/site";
+import { ICON_VERSION, OPEN_GRAPH, SITE_DESCRIPTION, SITE_TITLE, SITE_URL } from "@/lib/site";
 import { cn } from "@/lib/utils";
 import "./globals.css";
 
@@ -20,9 +20,10 @@ export const metadata: Metadata = {
   openGraph: OPEN_GRAPH,
   twitter: { card: "summary_large_image", title: SITE_TITLE, description: SITE_DESCRIPTION },
   manifest: "/manifest.webmanifest",
+  // Bump ICON_VERSION in src/lib/site.ts when the icons change: browsers keep favicons for a long time
   icons: {
-    icon: [{ url: "/icon.svg", type: "image/svg+xml" }, { url: "/favicon.ico", sizes: "any" }],
-    apple: "/apple-touch-icon.png",
+    icon: [{ url: `/icon.svg?v=${ICON_VERSION}`, type: "image/svg+xml" }, { url: `/favicon.ico?v=${ICON_VERSION}`, sizes: "any" }],
+    apple: `/apple-touch-icon.png?v=${ICON_VERSION}`,
   },
 };
 

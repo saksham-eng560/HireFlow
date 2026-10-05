@@ -8,20 +8,19 @@
 
 <p align="center">
   <a href="https://github.com/saksham-eng560/HireFlow/actions/workflows/ci.yml"><img src="https://github.com/saksham-eng560/HireFlow/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <a href="docs/TESTING.md"><img src="https://img.shields.io/badge/tests-435%20backend%20%2B%209%20e2e-2563EB" alt="Tests" /></a>
+  <a href="docs/TESTING.md"><img src="https://img.shields.io/badge/tests-439%20backend%20%2B%2015%20e2e-2563EB" alt="Tests" /></a>
   <a href="docs/TESTING.md"><img src="https://img.shields.io/badge/coverage-80%25-2563EB" alt="Coverage" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2563EB" alt="MIT license" /></a>
-  <!-- After deploying (docs/DEPLOY.md), point this badge at the live demo's URL. -->
-  <a href="#quick-start"><img src="https://img.shields.io/badge/demo-./start.sh%20--demo-2563EB" alt="Demo" /></a>
+  <a href="https://hireflow-three-woad.vercel.app"><img src="https://img.shields.io/badge/live%20demo-hireflow--three--woad.vercel.app-2563EB" alt="Live demo" /></a>
 </p>
 
 HireFlow finds internships, puts every one that passes your filters into a **Swipe Review** deck, and for each
 job you keep it tailors your resume (truthfully), writes a cover letter, fills the application form in a real
 browser and applies, then tracks the replies from Gmail and puts interviews on your calendar.
 
-**Try it:** `./start.sh --demo` runs the public demo on your machine: one click on **Try the demo**, fictional
-companies, nothing really sent. To put a live demo online, follow [docs/DEPLOY.md](docs/DEPLOY.md).
-<!-- Live demo: https://<your-demo>.vercel.app · 60-second walkthrough: <video link> (add both after deploying and recording) -->
+**Try it:** **[hireflow-three-woad.vercel.app](https://hireflow-three-woad.vercel.app)**, then **Try the demo**: one
+click, fictional companies, nothing really sent. Or run the same demo on your machine with `./start.sh --demo`.
+<!-- 60-second walkthrough: <video link> (add after recording) -->
 
 <p align="center"><img src="docs/screenshots/landing.png" alt="HireFlow's landing page: Swipe right. We apply." width="900" /></p>
 
@@ -128,6 +127,19 @@ best results.
 
 More: [running and self-hosting](docs/SELF_HOSTING.md) · [AI models](docs/AI_MODELS.md).
 
+### Free AI with Ollama
+
+[Ollama](https://ollama.com) runs open AI models on your own computer, free and private, with no API key:
+
+1. Install it from https://ollama.com/download (Mac: open the app once; Linux:
+   `curl -fsSL https://ollama.com/install.sh | sh`).
+2. Run `./start.sh --ollama`. It downloads the default model (`qwen3.5:4b`, about 3.4 GB) once and adds
+   `LLM_PROVIDER=ollama` and `OLLAMA_MODEL=qwen3.5:4b` to `.env`.
+3. In the dashboard, open **Settings › Integrations › AI model** and press **Test AI**.
+
+Choosing a model for your RAM, Docker, servers, Ollama Cloud, the deployed demo and troubleshooting:
+**[docs/OLLAMA.md](docs/OLLAMA.md)**.
+
 ## Guardrails
 
 Applying for someone is only useful if it never embarrasses them. These are enforced by the server, not just
@@ -162,22 +174,26 @@ make lint        # ruff, ESLint, TypeScript, colour contrast
 make metrics     # measure the numbers below
 ```
 
-Measured with `scripts/metrics.py`, not guessed: **435 backend tests (80% coverage) and 9 end-to-end tests**; on the demo
+Measured with `scripts/metrics.py`, not guessed: **439 backend tests (80% coverage) and 15 end-to-end tests**; on the demo
 careers site the first scan takes about 0.3 s, sign-up to the first Swipe Review deck takes under a second of
 server time (about 5 s through the UI), and 12 of 12 forms are filled in Chromium with every required field.
 CI runs all of it plus migrations, security audits and Docker builds: [docs/TESTING.md](docs/TESTING.md).
 
 ## Deployment
 
-- **Public demo** (Vercel + Render + Neon + Upstash + Cloudflare R2 + Sentry): [docs/DEPLOY.md](docs/DEPLOY.md),
-  with [`render.yaml`](render.yaml), [`frontend/vercel.json`](frontend/vercel.json) and a smoke test
-  (`scripts/smoke_test.py`) that checks a deployment like a visitor would.
+- **Free public demo** (what runs at [hireflow-three-woad.vercel.app](https://hireflow-three-woad.vercel.app)): the
+  dashboard on Vercel and the API, scheduler and Chromium in one free Hugging Face Space, deployed by
+  [`deploy-space.yml`](.github/workflows/deploy-space.yml) after every green CI run:
+  [docs/DEPLOY.md](docs/DEPLOY.md#free-deployment-vercel--hugging-face).
+- **Always-on demo** (Vercel + Render + Neon + Upstash + Cloudflare R2 + Sentry): [docs/DEPLOY.md](docs/DEPLOY.md#always-on-deployment-render-neon-upstash-r2),
+  with [`render.yaml`](render.yaml). Both are checked daily by a smoke test (`scripts/smoke_test.py`) that visits
+  the deployment like a visitor would.
 - **Your own server** (Docker Compose with automatic HTTPS, Oracle Cloud Always Free, AWS):
   [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md#deployment).
 
 ## Roadmap
 
-- A live public demo and a 60-second walkthrough video.
+- A 60-second walkthrough video.
 - Dedicated submitters for Ashby, SmartRecruiters and iCIMS (today they go through the generic form engine).
 - Fair per-user queues and a separate browser-worker pool for many users.
 - Browser-extension autofill for applications you fill in yourself.
@@ -186,6 +202,7 @@ CI runs all of it plus migrations, security audits and Docker builds: [docs/TEST
 ## Docs
 
 [User guide](docs/USER_GUIDE.md) · [Architecture](docs/ARCHITECTURE.md) · [AI models](docs/AI_MODELS.md) ·
+[Free AI with Ollama](docs/OLLAMA.md) ·
 [Self-hosting](docs/SELF_HOSTING.md) · [Deploying the demo](docs/DEPLOY.md) · [Testing](docs/TESTING.md) ·
 [Security and responsible use](docs/SECURITY.md) · [The plan](docs/HIREFLOW_PLAN.md)
 

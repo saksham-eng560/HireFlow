@@ -1,6 +1,7 @@
 # Smoke-tests the public demo (docs/DEPLOY.md): every day, after each dashboard deploy, and on demand.
-# Set the repository variables DEMO_SITE_URL (the dashboard, e.g. the Vercel URL) and, optionally,
-# DEMO_API_URL (the API's own URL, e.g. on Render). Without DEMO_SITE_URL the job is skipped.
+# It checks https://hireflow-three-woad.vercel.app unless the repository variable DEMO_SITE_URL says otherwise
+# (DEMO_API_URL, optional: the API's own URL). The daily visit also keeps a free Hugging Face Space awake
+# (they sleep after 48 hours without visitors).
 name: Smoke test (public demo)
 
 on:
@@ -16,9 +17,7 @@ permissions:
 
 jobs:
   smoke:
-    if: >-
-      vars.DEMO_SITE_URL != '' &&
-      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,7 +26,7 @@ jobs:
           python-version: "3.12"
       - name: Visit the demo like a visitor would
         env:
-          SITE: ${{ vars.DEMO_SITE_URL }}
+          SITE: ${{ vars.DEMO_SITE_URL || 'https://hireflow-three-woad.vercel.app' }}
           API: ${{ vars.DEMO_API_URL }}
         # Free plans sleep when idle, so the first request can take a minute
         run: python scripts/smoke_test.py --site "$SITE" ${API:+--api "$API"} --demo --timeout 120

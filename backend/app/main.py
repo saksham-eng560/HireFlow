@@ -167,7 +167,10 @@ def ready() -> JSONResponse:
         checks["database"] = "ok"
     except Exception as exc:  # noqa: BLE001
         checks["database"] = f"error: {exc}"
-    checks["redis"] = "ok" if get_redis() is not None else "unavailable (in-process fallback)"
+    if not settings.REDIS_URL:  # a single-container deployment runs its tasks in-process by design
+        checks["redis"] = "not used (in-process tasks)"
+    else:
+        checks["redis"] = "ok" if get_redis() is not None else "unavailable (in-process fallback)"
     checks["llm"] = ", ".join(get_llm().provider_names) or "not configured (heuristic mode)"
     healthy = checks["database"] == "ok"
     return JSONResponse({"status": "ok" if healthy else "degraded", "checks": checks}, status_code=200 if healthy else 503)

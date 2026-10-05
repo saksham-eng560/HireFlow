@@ -1,5 +1,9 @@
 /** Public facts about the site, for the landing page, SEO and the footer. Override them per deployment. */
 export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/+$/, "");
+
+/** Bump with every change to the icons in public/ (and the ?v= in manifest.webmanifest): it busts browsers' favicon caches. */
+export const ICON_VERSION = "2";
+
 export const GITHUB_URL = process.env.NEXT_PUBLIC_GITHUB_URL || "https://github.com/saksham-eng560/HireFlow";
 export const AUTHOR = {
   name: process.env.NEXT_PUBLIC_AUTHOR_NAME || "saksham-eng560",

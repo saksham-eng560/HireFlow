@@ -2,14 +2,13 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 /* ------------------------------------------------------------------ logo */
-/* A white "H" whose crossbar flows like a wave, on HireFlow blue (same drawing as public/icon.svg). */
+/* A bold white "H" whose crossbar rises (progress), on HireFlow blue (same drawing as public/icon.svg). */
 export function LogoMark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 32 32" className={cn("h-6 w-6", className)} aria-hidden>
-      <rect width="32" height="32" rx="7.25" fill="hsl(var(--brand))" />
-      <path d="M9.75 8.5v15M22.25 8.5v15" fill="none" stroke="hsl(var(--brand-foreground))" strokeWidth="3.6" strokeLinecap="round" />
-      <path d="M9.75 17.9c2.1-3.6 4.5-4.1 6.25-1.9s4.1 1.75 6.25-1.9" fill="none" stroke="hsl(var(--brand-soft))"
-        strokeWidth="2.9" strokeLinecap="round" />
+      <rect width="32" height="32" rx="7.5" fill="hsl(var(--brand))" />
+      <path d="M10.25 8.5v15M21.75 8.5v15" fill="none" stroke="hsl(var(--brand-foreground))" strokeWidth="4.75" strokeLinecap="round" />
+      <path d="M10.25 18.75L21.75 13.25" fill="none" stroke="hsl(var(--brand-foreground))" strokeWidth="4" strokeLinecap="round" />
     </svg>
   );
 }

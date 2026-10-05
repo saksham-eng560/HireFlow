@@ -167,7 +167,7 @@ Useful follow-ups:
   `docker compose -f docker-compose.prod.yml up -d` in that folder.
 - **Updating**: re-run the script.
 - **Free AI on the server**: re-run the script with `WITH_OLLAMA=1` in front of `bash`. See
-  [Free AI with Ollama](AI_MODELS.md#free-ai-with-ollama).
+  [Free AI with Ollama](OLLAMA.md).
 - **Idle servers**: Oracle may reclaim Always Free servers that stay almost completely idle for a
   week. Scheduled scans normally keep the server active enough. Upgrading the account to
   Pay-As-You-Go removes this risk, and Always Free resources stay free.
