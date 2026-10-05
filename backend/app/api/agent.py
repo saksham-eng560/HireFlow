@@ -17,7 +17,7 @@ from app.models.user import User
 from app.schemas.agent import StartScanRequest
 from app.scrapers import SCRAPERS
 from app.services import agent_orchestrator as orch
-from app.services import guardrails
+from app.services import guardrails, llm_usage
 from app.services.agent_orchestrator import get_master_resume
 from app.services.notifier import push_update
 from app.worker.dispatch import enqueue
@@ -81,6 +81,9 @@ def agent_status(user: CurrentUser, db: DB) -> dict:
         "paused": guardrails.is_paused(user),
         "paused_at": user.automation_paused_at.isoformat() if user.automation_paused_at else None,
         "dry_run": guardrails.dry_run(user),
+        # AI usage meter: calls made for you today (UTC) and your daily budget (0 = no limit)
+        "ai_calls_today": llm_usage.used_today(user.id),
+        "ai_daily_limit": llm_usage.daily_limit(),
         "running_runs": [run_out(r) for r in running],
         "last_scan_at": user.last_scan_at.isoformat() if user.last_scan_at else None,
         "next_scan_at": next_scan,

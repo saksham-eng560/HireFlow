@@ -49,7 +49,7 @@ from app.models.resume import Resume
 from app.models.user import User, UserFieldMapping
 from app.schemas.resume_content import ResumeContent
 from app.scrapers import SCRAPERS, ScrapedJob, ScraperError, SearchQuery, detect_ats_platform, fetch_job_from_url
-from app.services import guardrails
+from app.services import guardrails, llm_usage
 from app.services.application_service import set_status
 from app.services.company_verifier import SUSPICIOUS, UNVERIFIED, CompanyCheck, check_job, is_trusted, verify_with_llm
 from app.services.cover_letter import generate_cover_letter
@@ -669,7 +669,7 @@ def score_applications(db: Session, user: User, apps: list[Application], master:
     checkpoint(db)  # no write lock is held while the LLM works
     pool = ThreadPoolExecutor(max_workers=max(1, min(concurrency, len(to_llm))),
                               thread_name_prefix="scan-score")
-    futures = {pool.submit(evaluate_match, master.parsed_content, snap, prefs, threshold, use_llm=True): (app, heads_up)
+    futures = {pool.submit(llm_usage.in_context(evaluate_match), master.parsed_content, snap, prefs, threshold, use_llm=True): (app, heads_up)
                for app, heads_up, snap in to_llm}
     try:
         for idx, app in enumerate(apps[llm_count:]):  # the long tail: instant heuristic while the LLM works

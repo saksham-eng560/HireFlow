@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 
 from app.core.database import session_scope
 from app.models.user import User
+from app.services import llm_usage
 from app.services.gmail_service import start_watch, sync_user_inbox, watch_needs_renewal
 from app.services.google_oauth import GoogleAuthError
 from app.services.notifier import notify
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 @register("check_user_email")
 def check_user_email(user_id: str) -> dict[str, int]:
-    with session_scope() as db:
+    with llm_usage.for_user(user_id), session_scope() as db:
         user = db.get(User, uuid.UUID(user_id))
         if user is None or not user.google_connected:
             return {}

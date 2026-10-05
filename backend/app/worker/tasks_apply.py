@@ -3,31 +3,41 @@
 from __future__ import annotations
 
 import logging
+import uuid
+
+from sqlalchemy import select
 
 from app.core.database import session_scope
+from app.models.application import Application
 from app.services import agent_orchestrator as orch
-from app.services import guardrails
+from app.services import guardrails, llm_usage
 from app.worker.celery_app import celery_app
 from app.worker.dispatch import enqueue, register
 
 logger = logging.getLogger(__name__)
 
 
+def _owner(application_id: str) -> uuid.UUID | None:
+    """Whose application it is: AI calls made while working on it count against that user's budget."""
+    with session_scope() as db:
+        return db.scalar(select(Application.user_id).where(Application.id == uuid.UUID(str(application_id))))
+
+
 @register("prepare_application")
 def prepare_application(application_id: str) -> None:
-    with session_scope() as db:
+    with llm_usage.for_user(_owner(application_id)), session_scope() as db:
         orch.prepare_application(db, application_id)
 
 
 @register("stage_application")
 def stage_application(application_id: str) -> None:
-    with session_scope() as db:
+    with llm_usage.for_user(_owner(application_id)), session_scope() as db:
         orch.stage_application(db, application_id)
 
 
 @register("submit_application")
 def submit_application(application_id: str) -> None:
-    with session_scope() as db:
+    with llm_usage.for_user(_owner(application_id)), session_scope() as db:
         orch.submit_application(db, application_id)
 
 

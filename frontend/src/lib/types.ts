@@ -511,6 +511,9 @@ export interface AgentStatus {
   paused: boolean;
   paused_at: string | null;
   dry_run: boolean;
+  /** AI usage meter: calls made for you today (UTC) and the daily budget (0 = no limit). */
+  ai_calls_today: number;
+  ai_daily_limit: number;
 }
 
 export interface ReviewCard {

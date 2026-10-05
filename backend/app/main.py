@@ -15,12 +15,14 @@ from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy import text
 
 from app.api import agent, analytics, applications, auth, communications, files, interviews, jobs, onboarding, resumes, review, users
-from app.api.deps import default_rate_limit, limiter
+from app.api.deps import default_rate_limit, extract_token, limiter
 from app.config import settings
 from app.core.database import create_all, engine, wait_for_db
 from app.core.logging_config import configure_logging
 from app.core.redis import get_redis
+from app.core.security import TokenError, decode_token
 from app.core.websocket import manager
+from app.services import llm_usage
 from app.services.llm import get_llm
 
 configure_logging()
@@ -70,6 +72,20 @@ app.add_middleware(
 @app.exception_handler(RateLimitExceeded)
 def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
     return JSONResponse({"detail": f"Rate limit exceeded: {exc.detail}"}, status_code=429)
+
+
+@app.middleware("http")
+async def attribute_ai_usage(request: Request, call_next):  # type: ignore[no-untyped-def]
+    """AI calls made while serving a signed-in request count against that user's daily budget."""
+    user_id = None
+    token = extract_token(request)
+    if token:
+        try:
+            user_id = decode_token(token, expected_scopes=("access", "extension"))["sub"]
+        except (TokenError, KeyError):
+            user_id = None
+    with llm_usage.for_user(user_id):
+        return await call_next(request)
 
 
 @app.middleware("http")

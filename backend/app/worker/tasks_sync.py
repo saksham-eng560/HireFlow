@@ -9,6 +9,7 @@ from sqlalchemy import select
 
 from app.core.database import session_scope
 from app.models.user import User
+from app.services import llm_usage
 from app.services.linkedin_sync import sync_linkedin_profile
 from app.worker.celery_app import celery_app
 from app.worker.dispatch import enqueue, register
@@ -16,7 +17,7 @@ from app.worker.dispatch import enqueue, register
 
 @register("linkedin_sync_user")
 def linkedin_sync_user(user_id: str) -> dict[str, Any]:
-    with session_scope() as db:
+    with llm_usage.for_user(user_id), session_scope() as db:
         user = db.get(User, uuid.UUID(user_id))
         if user is None:
             return {"status": "missing"}

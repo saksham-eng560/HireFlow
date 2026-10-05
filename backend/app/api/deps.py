@@ -49,7 +49,7 @@ def default_rate_limit(request: HTTPConnection) -> None:
 DB = Annotated[Session, Depends(get_db)]
 
 
-def _extract_token(request: Request) -> str | None:
+def extract_token(request: Request) -> str | None:
     auth = request.headers.get("authorization")
     if auth and auth.lower().startswith("bearer "):
         return auth[7:].strip()
@@ -57,7 +57,7 @@ def _extract_token(request: Request) -> str | None:
 
 
 def _user_from_request(request: Request, db: Session, scopes: tuple[str, ...]) -> User:
-    token = _extract_token(request)
+    token = extract_token(request)
     if not token:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not authenticated")
     try:

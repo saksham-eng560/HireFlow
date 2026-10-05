@@ -180,6 +180,9 @@ function SheetRow({ row, state, focused, readOnly, rowRef, onFocus, onConfirm, o
                 {row.label}{row.required && <span className="text-primary" aria-label="required"> *</span>}
               </p>
               {row.kind === "profile" && <Badge tone="muted">profile</Badge>}
+              {row.source === "llm" && !state.edited && (
+                <Badge tone="info" title="Written by AI from your resume: check it, and edit it if it doesn't sound like you">AI-written</Badge>
+              )}
               {row.flagged && row.confidence != null && <Badge tone="warning">{Math.round(row.confidence * 100)}% sure</Badge>}
               {state.edited && <Badge tone="outline">edited</Badge>}
             </div>

@@ -34,6 +34,11 @@ const SUBSCORES = [
   ["location_match", "Location"], ["compensation_match", "Compensation"],
 ] as const;
 
+/** Where an answer came from, in plain words. */
+const ANSWER_SOURCE: Record<string, string> = {
+  llm: "AI-written", rule: "From your saved answers or resume", user: "Yours", profile: "Profile", fallback: "Needs you",
+};
+
 export default function ApplicationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: app, mutate, isLoading } = useApplication(id);
@@ -332,7 +337,7 @@ export default function ApplicationDetailPage() {
                     <div className="flex shrink-0 gap-1">
                       {a.needs_user_review && <Badge tone="warning">Review</Badge>}
                       {a.confidence != null && <Badge tone="muted">{Math.round(a.confidence * 100)}%</Badge>}
-                      {a.source && <Badge tone="outline">{a.source}</Badge>}
+                      {a.source && <Badge tone={a.source === "llm" ? "info" : "outline"}>{ANSWER_SOURCE[a.source] ?? a.source}</Badge>}
                     </div>
                   </div>
                   {a.options && a.options.length ? (

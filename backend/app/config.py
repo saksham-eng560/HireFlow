@@ -85,6 +85,12 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "gpt-4o"
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
     LLM_MAX_RETRIES: int = 3
+    # AI budget per user per day (0 = no limit); past it, features use their rule-based version until tomorrow (UTC)
+    LLM_CALLS_PER_USER_PER_DAY: int = 400
+    DEMO_LLM_CALLS_PER_USER_PER_DAY: int = 40
+    # The public demo (DEMO_MODE) uses these cheaper models when set
+    DEMO_ANTHROPIC_MODEL: str = ""
+    DEMO_OPENAI_MODEL: str = ""
     LLM_TIMEOUT_SECONDS: float = 300.0
     LLM_PROVIDER: str = "auto"  # auto (Anthropic -> OpenAI -> Ollama, whichever is set up) | anthropic | openai | ollama
     # Ollama: free models on your own machine / server, or Ollama Cloud (https://ollama.com)

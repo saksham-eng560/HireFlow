@@ -188,6 +188,19 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         <div className="h-full rounded-full bg-primary transition-all"
           style={{ width: `${Math.min(100, ((status?.applied_today ?? 0) / Math.max(1, status?.daily_limit ?? 1)) * 100)}%` }} />
       </div>
+      {!!status?.ai_daily_limit && (
+        <div className="mt-3" title="AI calls made for you today (UTC). Past the limit, HireFlow uses its rule-based answers until tomorrow.">
+          <div className="flex items-center justify-between">
+            <span className="label-caps text-[10px]">AI today</span>
+            <span className="tabular-nums text-foreground">{status.ai_calls_today} / {status.ai_daily_limit}</span>
+          </div>
+          <div className="mt-2 h-1 overflow-hidden rounded-full bg-primary/15" role="meter" aria-label="AI calls today"
+            aria-valuemin={0} aria-valuemax={status.ai_daily_limit} aria-valuenow={status.ai_calls_today}>
+            <div className="h-full rounded-full bg-primary transition-all"
+              style={{ width: `${Math.min(100, (status.ai_calls_today / status.ai_daily_limit) * 100)}%` }} />
+          </div>
+        </div>
+      )}
       <p className="mt-3 flex items-center gap-2">
         <span className={cn("h-2 w-2 rounded-full", live ? "animate-pulse-dot bg-success" : "bg-muted-foreground/50")} />
         {live ? "Live updates on" : "Polling for updates"}
