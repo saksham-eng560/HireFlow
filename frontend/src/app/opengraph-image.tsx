@@ -14,9 +14,9 @@ export default function OpengraphImage() {
         background: "#FFFFFF", padding: "64px 72px", fontFamily: "sans-serif", color: navy, position: "relative" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
           <svg width="64" height="64" viewBox="0 0 32 32">
-            <rect width="32" height="32" rx="7.25" fill={blue} />
-            <path d="M9.75 8.5v15M22.25 8.5v15" fill="none" stroke="#FFFFFF" strokeWidth="3.6" strokeLinecap="round" />
-            <path d="M9.75 17.9c2.1-3.6 4.5-4.1 6.25-1.9s4.1 1.75 6.25-1.9" fill="none" stroke="#BFDBFE" strokeWidth="2.9" strokeLinecap="round" />
+            <rect width="32" height="32" rx="7.5" fill={blue} />
+            <path d="M10.25 8.5v15M21.75 8.5v15" fill="none" stroke="#FFFFFF" strokeWidth="4.75" strokeLinecap="round" />
+            <path d="M10.25 18.75L21.75 13.25" fill="none" stroke="#FFFFFF" strokeWidth="4" strokeLinecap="round" />
           </svg>
           <div style={{ display: "flex", fontSize: 44 }}><span style={{ fontWeight: 800 }}>Hire</span><span>Flow</span></div>
         </div>

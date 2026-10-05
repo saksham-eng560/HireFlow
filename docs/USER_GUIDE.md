@@ -65,8 +65,8 @@ actions. Inter for the interface and JetBrains Mono for numbers, rounded corners
 from [shadcn/ui](https://ui.shadcn.com) (Radix) components restyled through the design tokens in
 `frontend/src/app/globals.css`, with framer-motion for the swipe deck, page transitions, staggered lists,
 counting numbers and the landing-page pipeline graphic. Every animation turns off when your system's
-"reduce motion" setting is on. The logo, favicon, PWA and extension icons share one mark, a white "H"
-with a flowing crossbar on blue (`frontend/public/icon.svg`).
+"reduce motion" setting is on. The logo, favicon, PWA and extension icons share one mark, a bold white "H"
+whose crossbar rises, on blue (`frontend/public/icon.svg`).
 
 **Notifications.** In-app, browser, e-mail (SMTP or your own Gmail), Discord and Slack. Every update on
 a job you applied to (submitted, "I Applied", reply, test, interview, offer, rejection) goes to all of
