@@ -1,9 +1,7 @@
 """Celery-Beat stand-in when there's no Redis: runs the periodic agent jobs in this process.
 
-Used by ``scripts/local_scheduler.py`` (its own process, as ``./start.sh`` runs it) and, with
-``RUN_SCHEDULER_IN_API=true``, by the API itself in a background thread: one process instead of two, which is
-what lets the whole demo fit a 512 MB free instance (docs/DEPLOY.md). The tasks the jobs enqueue (preparing
-kept jobs, submitting) run in that process's background threads.
+``scripts/local_scheduler.py`` runs it next to the API (``./start.sh`` starts it when Redis isn't installed).
+The tasks the jobs enqueue (preparing kept jobs, submitting) run in this process's background threads.
 """
 
 from __future__ import annotations
@@ -55,9 +53,3 @@ def run(stop: threading.Event) -> None:
         stop.wait(TICK)
     log.info("Local scheduler stopped")
 
-
-def start_in_background() -> threading.Event:
-    """Start the schedule in a daemon thread; set the returned event to stop it."""
-    stop = threading.Event()
-    threading.Thread(target=run, args=(stop,), name="local-scheduler", daemon=True).start()
-    return stop

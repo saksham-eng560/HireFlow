@@ -1,7 +1,6 @@
 # Running and self-hosting HireFlow
 
-Run it on your own computer or server. For the public demo deployment (Vercel, Render, Neon, Upstash,
-R2), see [DEPLOY.md](DEPLOY.md).
+Run it on your own computer (the usual way: [README](../README.md#quick-start)), or on a server of your own.
 
 ## One-command start
 
@@ -18,7 +17,7 @@ your browser and streams the logs. **Ctrl-C stops everything.**
 | Command | What it does |
 |---|---|
 | `./start.sh` | Local mode, no Docker. Uses Redis + a Celery worker + beat if `redis-server` is installed, otherwise runs tasks in-process with a built-in scheduler (scheduled scans still happen). |
-| `./start.sh --demo` | Demo mode, like the public demo: **Try the demo** signs in to a seeded account in one click, applications go to a bundled careers site with fictional companies, nothing real is sent, and everything resets nightly. |
+| `./start.sh --demo` | Demo mode: **Try the demo** signs in to a seeded account in one click, applications go to a bundled careers site with fictional companies, nothing real is sent, and everything resets nightly. |
 | `./start.sh --sample` | Also seeds a sample account (`demo@example.com` / `demo-password-123`) with a swipe deck, and serves the standalone sample careers site on :8765. |
 | `./start.sh --prod` | Production build of the dashboard (faster pages). |
 | `./start.sh --docker` | The full Docker Compose stack (PostgreSQL + pgvector, Redis, worker, beat). `./start.sh --stop` stops it. |
@@ -118,7 +117,7 @@ backend/.venv/bin/python scripts/test_scraper.py url https://job-boards.greenhou
 backend/.venv/bin/python scripts/migrate.py --reembed       # after changing EMBEDDING_PROVIDER
 ```
 
-## Deployment
+## On your own server (optional)
 
 ### Free, always on: Oracle Cloud "Always Free"
 
@@ -187,26 +186,3 @@ Caddy obtains a Let's Encrypt certificate for `DOMAIN` automatically. It routes 
 and `/health*` to the API and everything else to the dashboard. Set `ALLOW_REGISTRATION=false` once
 your account exists. Set the Google redirect URI to `https://<DOMAIN>/api/v1/auth/google/callback`.
 Back up the `pgdata` and `storage` volumes.
-
-### AWS ECS Fargate + Vercel (the plan's production architecture)
-
-- **Backend**: [`deploy-backend.yml`](../.github/workflows/deploy-backend.yml) builds the backend image,
-  pushes it to ECR, and rolls out new task definitions for the API, worker and beat ECS services.
-  - It runs after CI passes on `main`, or manually.
-  - Setup: create RDS PostgreSQL 16 (run `CREATE EXTENSION vector;`), ElastiCache Redis, an S3 or R2
-    bucket, an ECR repository `hireflow-backend`, and three ECS services running the same image with
-    commands `api`, `worker` and `beat`.
-  - Suggested sizing: API 2 vCPU / 4 GB behind an ALB, worker 4 vCPU / 8 GB, beat 0.25 vCPU / 0.5 GB,
-    with exactly **one** beat task.
-  - Repository variables: `AWS_REGION`, `AWS_ROLE_ARN` (a GitHub OIDC role), `ECS_CLUSTER`, and
-    optionally `ECR_REPOSITORY` and `ECS_SERVICES`.
-  - Migrations run when the API starts, serialized with a Postgres advisory lock so replicas can start
-    together.
-- **Dashboard**: [`deploy-frontend.yml`](../.github/workflows/deploy-frontend.yml) deploys to Vercel.
-  - Create a Vercel project with Root Directory `frontend`.
-  - Set its environment variables: `BACKEND_URL=https://api.<domain>` and
-    `NEXT_PUBLIC_WS_URL=wss://api.<domain>/api/v1/ws`.
-  - Add repository variables `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID`, and the secret `VERCEL_TOKEN`.
-  - Set `FRONTEND_URL` on the backend to the Vercel URL.
-
-Both workflows skip themselves until their variables are set.

@@ -66,17 +66,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await asyncio.to_thread(_ensure_demo_account)
     manager.bind_loop(asyncio.get_running_loop())
     await manager.start_subscriber()
-    scheduler = None
-    if settings.RUN_SCHEDULER_IN_API:
-        from app.worker.local_scheduler import start_in_background
-
-        scheduler = start_in_background()
     llm = get_llm()
-    logger.info("HireFlow API ready (env=%s, llm=%s, db=%s%s)", settings.ENVIRONMENT,
-                llm.provider_names or "heuristics-only", engine.dialect.name, ", scheduler in-process" if scheduler else "")
+    logger.info("HireFlow API ready (env=%s, llm=%s, db=%s)", settings.ENVIRONMENT,
+                llm.provider_names or "heuristics-only", engine.dialect.name)
     yield
-    if scheduler:
-        scheduler.set()
     await manager.stop_subscriber()
 
 

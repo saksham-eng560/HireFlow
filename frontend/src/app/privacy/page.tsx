@@ -41,7 +41,7 @@ export default function PrivacyPage() {
       </Section>
       <Section title="How long it's kept">
         <p>For as long as you have an account. Closed applications (rejected, withdrawn, skipped) and their files are
-          removed after two years by default, and notifications after 90 days. On the public demo, everything is reset
+          removed after two years by default, and notifications after 90 days. In demo mode, everything is reset
           every night: please don&apos;t upload a resume you wouldn&apos;t want on a demo server.</p>
       </Section>
       <Section title="Your choices">

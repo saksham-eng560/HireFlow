@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-"""Smoke-test a HireFlow deployment, the way a visitor uses it (docs/DEPLOY.md). Python standard library only.
+"""Smoke-test a running HireFlow the way a visitor uses it. Python standard library only.
 
-    python3 scripts/smoke_test.py --site https://hireflow-demo.vercel.app --api https://hireflow-api.onrender.com --demo
-    python3 scripts/smoke_test.py --site http://localhost:3000 --api http://localhost:8000 --demo   # locally
+    python3 scripts/smoke_test.py --site http://localhost:3000 --api http://localhost:8000 --demo
 
---site is the dashboard (Vercel); --api is the API's own URL (Render), optional. --demo also checks the public
+--site is the dashboard; --api is the API's own URL, optional. --demo (with ./start.sh --demo) also checks the
 demo: "Try the demo" signs in, the deck is full, dry run is on, and the demo careers site answers. Every check
-prints a line; the exit code is 1 if any failed. Free-tier services sleep, so the first request may be slow:
---timeout is per request.
+prints a line; the exit code is 1 if any failed. --timeout is per request.
 """
 
 from __future__ import annotations
@@ -96,7 +94,7 @@ def main() -> int:
         checks = (_json(body) or {}).get("checks", {})
         run.check("database reachable", status == 200 and checks.get("database") == "ok", json.dumps(checks))
         if api.startswith("https://"):
-            # A single-container deployment (docs/DEPLOY.md, free hosting) has no Redis on purpose
+            # Redis is optional (./start.sh runs without it when it isn't installed)
             redis = str(checks.get("redis"))
             run.check("Redis connected (or not used)", redis == "ok" or redis.startswith("not used"), redis)
             status, headers, _ = http.request("GET", f"{api}/health")

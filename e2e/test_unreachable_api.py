@@ -1,8 +1,7 @@
-"""When the API can't be reached (not deployed yet, asleep, down), visitors get a clear message, not a status code."""
+"""When the API can't be reached (not started, still starting, stopped), people get a clear message, not a status code."""
 
 from __future__ import annotations
 
-import os
 import re
 
 import pytest
@@ -12,16 +11,16 @@ from playwright.sync_api import Page, Route, expect
 MESSAGE = re.compile(r"Can't reach the HireFlow server right now")
 
 
-def _vercel_404(route: Route) -> None:
-    # What Vercel answers when the dashboard's /api proxy has no backend behind it (plain text, not JSON)
+def _proxy_404(route: Route) -> None:
+    # What a proxy in front of the API answers when nothing runs behind it (plain text, not JSON)
     route.fulfill(status=404, content_type="text/plain; charset=utf-8", body="The page could not be found\n\nNOT_FOUND\n")
 
 
-def _space_starting(route: Route) -> None:
-    route.fulfill(status=503, content_type="text/html", body="<html><body>Your space is starting</body></html>")
+def _server_starting(route: Route) -> None:
+    route.fulfill(status=503, content_type="text/html", body="<html><body>Service unavailable</body></html>")
 
 
-@pytest.mark.parametrize("answer", [_vercel_404, _space_starting, lambda route: route.abort("connectionrefused")])
+@pytest.mark.parametrize("answer", [_proxy_404, _server_starting, lambda route: route.abort("connectionrefused")])
 def test_signing_in_without_a_server_says_so(page: Page, answer: object) -> None:
     page.goto(f"{BASE}/login")
     page.route("**/api/v1/**", answer)
@@ -34,7 +33,7 @@ def test_signing_in_without_a_server_says_so(page: Page, answer: object) -> None
 
 def test_try_the_demo_without_a_server_says_so(page: Page) -> None:
     page.goto(BASE)
-    page.route("**/api/v1/auth/demo", _vercel_404)
+    page.route("**/api/v1/auth/demo", _proxy_404)
     page.get_by_role("button", name="Try the demo").first.click()
     expect(page.get_by_text(MESSAGE).first).to_be_visible()
 
@@ -48,11 +47,3 @@ def test_real_api_errors_keep_their_own_message(page: Page) -> None:
     expect(page.get_by_text("Invalid email or password")).to_be_visible()
     expect(page.get_by_text(MESSAGE)).to_have_count(0)
 
-
-@pytest.mark.skipif(os.environ.get("NEXT_PUBLIC_DEMO_MODE") != "true", reason="needs the demo's dashboard build")
-def test_the_demo_site_keeps_its_main_button_while_the_api_is_away(page: Page) -> None:
-    """The public demo's landing page still offers "Try the demo" with no API at all, and explains on click."""
-    page.route("**/api/v1/**", _vercel_404)
-    page.goto(BASE)
-    page.get_by_role("button", name="Try the demo").first.click()
-    expect(page.get_by_text(MESSAGE).first).to_be_visible()

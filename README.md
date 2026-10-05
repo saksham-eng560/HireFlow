@@ -8,19 +8,17 @@
 
 <p align="center">
   <a href="https://github.com/saksham-eng560/HireFlow/actions/workflows/ci.yml"><img src="https://github.com/saksham-eng560/HireFlow/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <a href="docs/TESTING.md"><img src="https://img.shields.io/badge/tests-443%20backend%20%2B%2015%20e2e-2563EB" alt="Tests" /></a>
+  <a href="docs/TESTING.md"><img src="https://img.shields.io/badge/tests-437%20backend%20%2B%2014%20e2e-2563EB" alt="Tests" /></a>
   <a href="docs/TESTING.md"><img src="https://img.shields.io/badge/coverage-80%25-2563EB" alt="Coverage" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2563EB" alt="MIT license" /></a>
-  <a href="https://hireflow-three-woad.vercel.app"><img src="https://img.shields.io/badge/live%20demo-hireflow--three--woad.vercel.app-2563EB" alt="Live demo" /></a>
 </p>
 
 HireFlow finds internships, puts every one that passes your filters into a **Swipe Review** deck, and for each
 job you keep it tailors your resume (truthfully), writes a cover letter, fills the application form in a real
 browser and applies, then tracks the replies from Gmail and puts interviews on your calendar.
 
-**Try it:** **[hireflow-three-woad.vercel.app](https://hireflow-three-woad.vercel.app)**, then **Try the demo**: one
-click, fictional companies, nothing really sent. Or run the same demo on your machine with `./start.sh --demo`.
-<!-- 60-second walkthrough: <video link> (add after recording) -->
+It runs on your own computer: your resume, accounts and data never leave it. **Try it in two commands**
+([Quick start](#quick-start)): `./start.sh --demo`, then **Try the demo** at http://localhost:3000.
 
 <p align="center"><img src="docs/screenshots/landing.png" alt="HireFlow's landing page: Swipe right. We apply." width="900" /></p>
 
@@ -103,42 +101,106 @@ LLM fallback works: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Quick start
 
+Works on **macOS, Linux and Windows (with WSL)**. You need **Git**, **Python 3.11+** and **Node.js 20+**.
+
+<details>
+<summary><b>Don't have them yet?</b> (click)</summary>
+
+- **macOS:** install [Homebrew](https://brew.sh), then `brew install git python@3.12 node`.
+  (The Python that comes with macOS is 3.9: too old.)
+- **Ubuntu / Debian / WSL:** `sudo apt update && sudo apt install -y git python3 python3-venv python3-pip nodejs npm`,
+  then check `node -v` says 20 or newer (if not, install Node 20 from https://nodejs.org).
+- **Windows:** install [WSL](https://learn.microsoft.com/windows/wsl/install) (`wsl --install` in PowerShell, then
+  restart), open **Ubuntu** and follow the Ubuntu line above. Or, with Docker Desktop only: `start.bat`.
+
+Check with `python3 --version` and `node -v`.
+</details>
+
+### 1. Get it
+
 ```bash
-git clone https://github.com/saksham-eng560/HireFlow.git && cd HireFlow
-./start.sh --demo      # the demo: press "Try the demo" at http://localhost:3000
-./start.sh             # your own agent: sign up and follow the onboarding
+git clone https://github.com/saksham-eng560/HireFlow.git
+cd HireFlow
 ```
 
-**What to try in the demo** (nothing is really sent; the data resets every night):
+### 2. Try the demo (2 minutes, nothing is really sent)
 
-1. Open http://localhost:3000 and press **Try the demo**: you're signed in to a sample candidate with a few past
-   applications, replies and interviews.
+```bash
+./start.sh --demo
+```
+
+The first run takes 3–5 minutes: it installs everything (Python packages, a Chromium browser for form filling, the
+dashboard) and creates `.env` with fresh secrets. Later runs start in seconds. Your browser opens
+**http://localhost:3000**; keep the terminal open while you use it and press **Ctrl-C** there to stop.
+
+1. Press **Try the demo**: you're signed in to a sample candidate with past applications, replies and interviews.
 2. **Swipe Review**: keep a job (drag right or press →) and skip one (←). Undo with **Z**.
-3. A few seconds later the kept job is in **Ready to submit**: its resume tailored and the form filled on the bundled
-   demo careers site (dry run). Check each field, then open **Full details** to see the form screenshot.
-4. Look around **Overview**, **Applications**, **Interviews** and **Analytics**, and try **Pause** in the header.
-5. To see onboarding, sign out, **Get started** with any e-mail, and press **Load sample profile**.
+3. Seconds later the kept job is in **Ready to submit**: resume tailored, form filled on the bundled demo careers
+   site with fictional companies (dry run). Open **Full details** to see the screenshot of the filled form.
+4. Look around **Overview**, **Applications**, **Interviews** and **Analytics**; try **Pause** in the header.
 
-Needs Python 3.11+ and Node 20+ (macOS, Linux or WSL). The first run creates `.env` with fresh secrets,
-installs everything and prepares a local database; later runs start in seconds. `./start.sh --docker` runs the
-full stack (PostgreSQL, Redis, workers) in Docker instead, and `./start.sh --ollama` sets up a free local AI
-model. Everything works without an AI key, on built-in heuristics; add `ANTHROPIC_API_KEY` to `.env` for the
-best results.
+The demo has its own database, separate from your real account, and resets every night.
 
-More: [running and self-hosting](docs/SELF_HOSTING.md) · [AI models](docs/AI_MODELS.md).
+### 3. Use it for real
 
-### Free AI with Ollama
+```bash
+./start.sh
+```
 
-[Ollama](https://ollama.com) runs open AI models on your own computer, free and private, with no API key:
+Open http://localhost:3000, **Get started**, and follow the onboarding: upload your resume, pick target roles and
+places, save your work-authorization answers, then run the first scan and start swiping. (No resume handy? **Load
+sample profile** fills everything in.) Your data stays in `backend/data/` on your computer.
 
-1. Install it from https://ollama.com/download (Mac: open the app once; Linux:
-   `curl -fsSL https://ollama.com/install.sh | sh`).
-2. Run `./start.sh --ollama`. It downloads the default model (`qwen3.5:4b`, about 3.4 GB) once and adds
-   `LLM_PROVIDER=ollama` and `OLLAMA_MODEL=qwen3.5:4b` to `.env`.
-3. In the dashboard, open **Settings › Integrations › AI model** and press **Test AI**.
+### 4. Free AI with Ollama (optional)
 
-Choosing a model for your RAM, Docker, servers, Ollama Cloud, the deployed demo and troubleshooting:
-**[docs/OLLAMA.md](docs/OLLAMA.md)**.
+HireFlow works without any AI, on built-in matching and templates. For better matching, tailoring and cover
+letters, run a free AI model on your own computer with [Ollama](https://ollama.com), no account or key needed:
+
+1. Install Ollama: **Mac** – download the app from https://ollama.com/download and open it once;
+   **Linux / WSL** – `curl -fsSL https://ollama.com/install.sh | sh`.
+2. Start HireFlow with it (add `--demo` to use it in the demo):
+
+   ```bash
+   ./start.sh --ollama
+   ```
+
+   The first time, it downloads the default model `qwen3.5:4b` (about 3.4 GB, good for 8–16 GB of RAM) and adds
+   `LLM_PROVIDER=ollama` and `OLLAMA_MODEL=qwen3.5:4b` to `.env`. After that, plain `./start.sh` keeps using it.
+3. In the dashboard: **Settings › Integrations › AI model › Test AI**.
+
+Another model (smaller for 8 GB, bigger for 16 GB+), Ollama in Docker, Ollama Cloud and troubleshooting:
+**[docs/OLLAMA.md](docs/OLLAMA.md)**. Prefer Claude? Put `ANTHROPIC_API_KEY=...` in `.env` (with a text editor).
+
+### Everyday commands
+
+| Command | What it does |
+|---|---|
+| `./start.sh` | Start HireFlow (your own account) at http://localhost:3000 |
+| `./start.sh --demo` | Start the demo (fictional jobs, nothing really sent) |
+| `./start.sh --ollama` | Start with a free local AI model (combine with `--demo`) |
+| `./start.sh --prod` | Faster pages: builds the dashboard first |
+| `./start.sh --reset` | Start with an empty database (with `--demo`: a fresh demo) |
+| `./start.sh --docker` | Run everything in Docker instead (PostgreSQL, Redis, workers); `./start.sh --stop` stops it |
+| **Ctrl-C** | Stop (in the terminal where it runs) |
+| `git pull` then `./start.sh` | Update to the latest version (it reinstalls only what changed) |
+
+<details>
+<summary><b>Something not working?</b> (click)</summary>
+
+| You see | Do this |
+|---|---|
+| `Python 3.11+ is required` | Install a newer Python (see *Don't have them yet?* above). |
+| `Node.js 20+ is required` | Install Node 20 or newer. |
+| `Port 3000 is already in use` | Another app (or an earlier HireFlow) uses it: close it, or `WEB_PORT=3001 ./start.sh`. Same for 8000 with `API_PORT`. |
+| "Can't reach the HireFlow server right now" in the browser | The API isn't running: look at the terminal for an error, or check `logs/api.log`. |
+| `Chromium install failed` | Form filling needs it. Run `backend/.venv/bin/python -m playwright install chromium` (on Linux add `--with-deps`). |
+| `Ollama isn't running` | Open the Ollama app (Mac) or run `ollama serve`. More in [docs/OLLAMA.md](docs/OLLAMA.md#troubleshooting). |
+| Forgot your password | `backend/.venv/bin/python scripts/account.py reset-password you@example.com` |
+| Anything else | Logs are in `logs/` (`api.log`, `web.log`). |
+</details>
+
+More: [running with Docker, development setup and your own server](docs/SELF_HOSTING.md) ·
+[AI models](docs/AI_MODELS.md).
 
 ## Guardrails
 
@@ -174,21 +236,16 @@ make lint        # ruff, ESLint, TypeScript, colour contrast
 make metrics     # measure the numbers below
 ```
 
-Measured with `scripts/metrics.py`, not guessed: **443 backend tests (80% coverage) and 15 end-to-end tests**; on the demo
+Measured with `scripts/metrics.py`, not guessed: **437 backend tests (80% coverage) and 14 end-to-end tests**; on the demo
 careers site the first scan takes about 0.3 s, sign-up to the first Swipe Review deck takes under a second of
 server time (about 5 s through the UI), and 12 of 12 forms are filled in Chromium with every required field.
-CI runs all of it plus migrations, security audits and Docker builds: [docs/TESTING.md](docs/TESTING.md).
+CI runs all of it plus migrations, security audits and Docker builds on every push: [docs/TESTING.md](docs/TESTING.md).
 
-## Deployment
+## Running it on a server (optional)
 
-- **Free public demo** (what runs at [hireflow-three-woad.vercel.app](https://hireflow-three-woad.vercel.app)): the
-  dashboard on Vercel, and the API, scheduler and Chromium in one 512 MB container on Render's free plan, deployed
-  in one click from [`render.yaml`](render.yaml): [docs/DEPLOY.md](docs/DEPLOY.md#free-deployment-vercel--render).
-- **Always-on demo** (Vercel + Render + Neon + Upstash + Cloudflare R2 + Sentry): [docs/DEPLOY.md](docs/DEPLOY.md#always-on-deployment-render-neon-upstash-r2),
-  with [`deploy/render-always-on.yaml`](deploy/render-always-on.yaml). Both are checked daily by a smoke test
-  (`scripts/smoke_test.py`) that visits the deployment like a visitor would.
-- **Your own server** (Docker Compose with automatic HTTPS, Oracle Cloud Always Free, AWS):
-  [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md#deployment).
+HireFlow is built to run on your own computer. To keep it running around the clock (scans every few hours, Gmail
+replies tracked live), put it on a server of your own with Docker Compose and automatic HTTPS: one command on a
+fresh Ubuntu machine, including Oracle Cloud's free tier. See [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md#on-your-own-server-optional).
 
 ## Roadmap
 
@@ -202,7 +259,7 @@ CI runs all of it plus migrations, security audits and Docker builds: [docs/TEST
 
 [User guide](docs/USER_GUIDE.md) · [Architecture](docs/ARCHITECTURE.md) · [AI models](docs/AI_MODELS.md) ·
 [Free AI with Ollama](docs/OLLAMA.md) ·
-[Self-hosting](docs/SELF_HOSTING.md) · [Deploying the demo](docs/DEPLOY.md) · [Testing](docs/TESTING.md) ·
+[Running and self-hosting](docs/SELF_HOSTING.md) · [Testing](docs/TESTING.md) ·
 [Security and responsible use](docs/SECURITY.md) · [The plan](docs/HIREFLOW_PLAN.md)
 
 ## License

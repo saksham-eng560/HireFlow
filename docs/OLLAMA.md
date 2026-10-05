@@ -8,7 +8,7 @@ makes the writing and matching much better, and Claude (an `ANTHROPIC_API_KEY`) 
 - [The quick way (Mac or Linux)](#the-quick-way)
 - [Which model to choose](#which-model-to-choose)
 - [Windows](#windows) · [Docker](#with-docker) · [Your own server](#on-your-own-server) ·
-  [Ollama Cloud](#ollama-cloud-big-models-no-download) · [The deployed demo](#the-deployed-demo)
+  [Ollama Cloud](#ollama-cloud-big-models-no-download)
 - [Check that it works](#check-that-it-works) · [What to expect](#what-to-expect) ·
   [Switch models or turn it off](#switch-models-or-turn-it-off) · [Troubleshooting](#troubleshooting) ·
   [All settings](#all-settings)
@@ -127,15 +127,6 @@ The free plan runs one request at a time, which is what `OLLAMA_CONCURRENCY=1` (
 You can also use cloud models through a local Ollama: run `ollama signin`, then pick a model whose name ends in
 `-cloud` (no `OLLAMA_API_KEY` needed in that case).
 
-## The deployed demo
-
-The [free deployment](DEPLOY.md#free-deployment-vercel--render)'s API runs on Render's free plan: 512 MB and no
-GPU, far too small for a local model. Use Ollama Cloud instead: in Render, open the service → **Environment** and
-add `LLM_PROVIDER=ollama`, `OLLAMA_BASE_URL=https://ollama.com`, `OLLAMA_MODEL=gpt-oss:120b` and `OLLAMA_API_KEY`
-(your key; Render keeps it secret). The service restarts with them. Each visitor's
-AI use is capped per day (`DEMO_LLM_CALLS_PER_USER_PER_DAY`, 40 by default), and the demo refuses **Download
-model**: the model is chosen by whoever deploys it.
-
 ## Check that it works
 
 **Settings › Integrations › AI model** shows:
@@ -192,7 +183,7 @@ Restart HireFlow after editing `.env`.
 
 ## All settings
 
-Set in `.env` (or the host's environment settings for the deployed demo). Only `OLLAMA_MODEL` (or `LLM_PROVIDER=ollama`) is
+Set in `.env`. Only `OLLAMA_MODEL` (or `LLM_PROVIDER=ollama`) is
 needed; the rest have sensible defaults.
 
 | Setting | Default | What it does |

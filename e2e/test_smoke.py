@@ -1,5 +1,5 @@
-"""The deployment smoke test (scripts/smoke_test.py, docs/DEPLOY.md) passes against the demo-mode servers, so it's
-known to work before it's pointed at a real deployment."""
+"""The smoke test (scripts/smoke_test.py) passes against the demo-mode servers, so it can be trusted to check any
+running HireFlow."""
 
 from __future__ import annotations
 

@@ -1,5 +1,9 @@
 # HireFlow: plan to make it resume-ready
 
+> **Status:** phases 1–5 and 7 are done. Phase 6 (a hosted public demo) was built and then removed on purpose:
+> HireFlow is meant to run on your own computer (see the [README](../README.md#quick-start)). This file is kept
+> as the record of the plan.
+
 This plan turns **AutoApply AI** into **HireFlow**, a polished, deployable, resume-ready project.
 **Every main feature stays**: scanning, Swipe Review, resume tailoring, cover letters, form filling,
 Gmail tracking, Calendar interviews, analytics, the Chrome extension and the Internshala bot.
@@ -317,14 +321,14 @@ smoke test → link it from the README and landing page.
 | 3 | Onboarding: backend + frontend + tests (section 4) | 3–4 days | ✓ Done |
 | 4 | Guardrails (section 5) | 2–3 days | ✓ Done |
 | 5 | Landing page, README, architecture doc, polish (section 6) | 2 days | ✓ Done |
-| 6 | Demo deployment (section 7) | 1–2 days | ✓ Configs, smoke test and [DEPLOY.md](DEPLOY.md) ready; creating the accounts and deploying is yours |
+| 6 | Demo deployment (section 7) | 1–2 days | Removed: HireFlow runs locally (`./start.sh --demo` is the demo) |
 | 7 | Measure numbers, record the video, update resume (section 8) | 1 day | ✓ Measured (below); the video and the resume entry are yours |
 
 **Measured** with `scripts/metrics.py` (see [TESTING.md](TESTING.md#the-numbers)), for the resume entry in section 8:
 
 | Number | Measured |
 |---|---|
-| Tests | 443 backend (pytest) + 15 end-to-end (Playwright, through the real dashboard); 80% backend coverage |
+| Tests | 437 backend (pytest) + 14 end-to-end (Playwright, through the real dashboard); 80% backend coverage |
 | Time from sign-up to the first swipe deck | 0.9 s of server time; about 5 s through the UI (e2e) |
 | Jobs per scan and scan time (demo careers site) | 12 postings found and all 12 in the deck, in 0.3 s |
 | Form-fill success (demo careers site, Chromium, dry run) | 12 of 12 forms, 100% of fields, every required field |

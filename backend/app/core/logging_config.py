@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any
 
 from app.config import settings
@@ -41,6 +40,6 @@ def configure_logging() -> None:
 
         sentry_sdk.init(dsn=settings.SENTRY_DSN, environment=settings.ENVIRONMENT,
                         traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
-                        release=settings.SENTRY_RELEASE or os.environ.get("RENDER_GIT_COMMIT") or None,
+                        release=settings.SENTRY_RELEASE or None,
                         send_default_pii=False, before_send=_scrub_event)
     _configured = True

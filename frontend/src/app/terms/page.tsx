@@ -4,13 +4,13 @@ import { LegalPage, Section } from "@/components/legal-page";
 
 export const metadata: Metadata = {
   title: "Terms",
-  description: "The terms for using HireFlow and its public demo.",
+  description: "The terms for using HireFlow and its demo mode.",
 };
 
 export default function TermsPage() {
   return (
     <LegalPage title="Terms" updated="5 October 2026"
-      intro={<>HireFlow helps you find internships and apply to them. Using it, or its public demo, means agreeing to these
+      intro={<>HireFlow helps you find internships and apply to them. Using it, or its demo, means agreeing to these
         terms. They&apos;re short on purpose.</>}>
       <Section title="You're the applicant">
         <ul>
@@ -29,10 +29,10 @@ export default function TermsPage() {
         <ul>
           <li>Use HireFlow for your own job search, honestly.</li>
           <li>Don&apos;t use it to send false information, to apply for someone else without their consent, to spam employers, or to collect other people&apos;s data.</li>
-          <li>Don&apos;t try to break, overload or get around the limits of a HireFlow server you don&apos;t run (the public demo included).</li>
+          <li>Don&apos;t try to break, overload or get around the limits of a HireFlow server you don&apos;t run.</li>
         </ul>
       </Section>
-      <Section title="The public demo">
+      <Section title="The demo">
         <p>The demo is for trying HireFlow out. Nothing is really sent: applications go to a bundled sample careers site,
           job-site logins and Gmail are off, and all data is reset every night. It may be slow, limited or unavailable at
           any time.</p>
