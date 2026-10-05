@@ -59,7 +59,7 @@ jobs:
       - name: Ruff
         run: |
           ruff check app tests alembic/env.py
-          ruff check ../scripts
+          ruff check ../scripts ../e2e
 
       - name: Bandit (security lint)
         run: bandit -q -r app -ll

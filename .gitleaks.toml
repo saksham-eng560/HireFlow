@@ -9,7 +9,7 @@ useDefault = true
 description = "Test fixtures, CI placeholders and the specification's example values"
 paths = [
   '''^backend/tests/''',
-  '''^PROJECT_SPECIFICATION\.md$''',
+  '''^(docs/)?PROJECT_SPECIFICATION\.md$''',  # it moved into docs/; history still has the old path
 ]
 regexes = [
   '''ci-secret-key-that-is-long-enough-for-hs256-signing''',
