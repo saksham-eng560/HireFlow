@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowUpRight, Check, Play, ShieldCheck, X } from "lucide-react";
 import { BrushHeadline, Logo, Seal, TagPile, TunnelGrid } from "@/components/brand";
+import { LEGAL_LINKS } from "@/components/legal-page";
 import { PipelineMotion } from "@/components/motion-graphics";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { buttonVariants } from "@/components/ui/button";
@@ -194,6 +195,9 @@ export default function Landing() {
         </section>
         <footer className="flex flex-col justify-between gap-2 border-t border-line/70 px-5 py-6 text-sm text-muted-foreground sm:flex-row sm:px-10">
           <Logo className="text-base text-foreground" />
+          <nav aria-label="Policies" className="flex flex-wrap gap-x-4 gap-y-1">
+            {LEGAL_LINKS.map((l) => <Link key={l.href} href={l.href} className="hover:text-foreground hover:underline">{l.label}</Link>)}
+          </nav>
           <p>Self-hosted · your data stays on your server · MIT licensed</p>
         </footer>
       </div>

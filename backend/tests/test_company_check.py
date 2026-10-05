@@ -124,7 +124,9 @@ def test_top_companies_keeps_internships_at_that_company(monkeypatch: Any) -> No
                 _job("Googly Solutions", "Software Intern", platform=ATSPlatform.LINKEDIN)]
 
     monkeypatch.setattr(LinkedInScraper, "search", linkedin)
-    jobs = tc.TopCompaniesScraper().search(SearchQuery(limit=50))
+    # LinkedIn forbids automation: without your OK, its company searches don't run at all
+    assert [j.company_name for j in tc.TopCompaniesScraper().search(SearchQuery(limit=50))] == ["Stripe"] and searched == []
+    jobs = tc.TopCompaniesScraper().search(SearchQuery(limit=50, allowed_gated=frozenset({"linkedin"})))
     assert sorted((j.company_name, j.role_title) for j in jobs) == [
         ("Google", "Software Engineering Intern, 2027"), ("Stripe", "Software Engineering Intern")]
     assert searched[0].search_terms == ["Google intern"] and searched[0].job_types == ["internship"]

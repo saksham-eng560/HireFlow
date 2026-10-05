@@ -93,6 +93,11 @@ class PreferencesUpdate(BaseModel):
     preferences: dict[str, Any]
 
 
+class SourceConsentIn(BaseModel):
+    enabled: bool
+    agree: bool = False  # "I understand the risk": required to turn a site that forbids automation on
+
+
 class FieldMappingIn(BaseModel):
     field_name: str = Field(min_length=1, max_length=255)
     field_value: str

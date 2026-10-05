@@ -31,6 +31,7 @@ PLATFORM_LIMITS: dict[str, PlatformLimit] = {
 }
 DEFAULT_LIMIT = PlatformLimit(100, 20, (60, 180))
 RATE_LIMIT_COOLDOWN_SECONDS = 15 * 60  # pause a platform for 15 min after HTTP 429
+MAX_BACKOFF_SECONDS = 6 * 3600  # repeated 429s / captchas double the pause, up to 6 hours
 
 
 def limit_for(platform: str) -> PlatformLimit:
@@ -86,6 +87,16 @@ class RateLimiter:
 
     def pause_platform(self, platform: str, seconds: int = RATE_LIMIT_COOLDOWN_SECONDS) -> None:
         self._set(f"rl:pause:{platform}", time.time() + seconds, seconds)
+
+    def back_off(self, platform: str, retry_after: float | None = None) -> int:
+        """A site said "slow down" (HTTP 429, or a captcha / bot wall): pause it, twice as long each time it
+        happens again within a few hours (15 min, 30, 60... up to 6 h), and never less than its Retry-After."""
+        strikes = self._incr(f"rl:strikes:{platform}", MAX_BACKOFF_SECONDS)
+        seconds = min(RATE_LIMIT_COOLDOWN_SECONDS * 2 ** (strikes - 1), MAX_BACKOFF_SECONDS)
+        if retry_after:
+            seconds = max(seconds, min(int(retry_after), MAX_BACKOFF_SECONDS))
+        self.pause_platform(platform, seconds)
+        return seconds
 
     def is_paused(self, platform: str) -> bool:
         return self._get(f"rl:pause:{platform}") > time.time()

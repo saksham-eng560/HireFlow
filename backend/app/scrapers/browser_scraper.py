@@ -9,13 +9,11 @@ from typing import Any
 
 from app.automation.browser import BrowserSession, BrowserUnavailable
 from app.automation.human import human_scroll, pause
-from app.scrapers.base import BaseScraper, RateLimited, ScraperError
+from app.scrapers.base import BaseScraper, RateLimited, ScraperError, looks_blocked, retry_after_seconds
 from app.services.rate_limiter import rate_limiter
 
 logger = logging.getLogger(__name__)
 
-BLOCK_MARKERS = ("cf-challenge", "challenge-platform", "Just a moment...", "px-captcha", "Access Denied",
-                 "verify you are human", "unusual traffic")
 
 
 def extract_assigned_json(html: str, variable: str) -> Any:
@@ -71,8 +69,8 @@ class BrowserScraper(BaseScraper):
             raise RateLimited(f"{self.rate_key} request budget exhausted or cooling down")
         response = session.page.goto(url, wait_until="domcontentloaded")
         if response is not None and response.status == 429:
-            rate_limiter.pause_platform(self.rate_key)
-            raise RateLimited(f"{self.rate_key} returned HTTP 429")
+            paused = rate_limiter.back_off(self.rate_key, retry_after_seconds(response.headers.get("retry-after")))
+            raise RateLimited(f"{self.rate_key} returned HTTP 429: paused for {paused // 60} min")
         if wait_selector:
             try:
                 session.page.wait_for_selector(wait_selector, timeout=15000)
@@ -81,8 +79,9 @@ class BrowserScraper(BaseScraper):
         pause(1.5, 4)
         human_scroll(session.page)
         html = session.html()
-        if any(marker in html[:20000] for marker in BLOCK_MARKERS) and len(html) < 200000:
-            raise ScraperError(f"{self.rate_key}: blocked by bot protection (configure PROXY_URLS)")
+        if looks_blocked(html[:20000]) and len(html) < 200000:
+            paused = rate_limiter.back_off(self.rate_key)  # don't keep knocking: the site wants a person
+            raise RateLimited(f"{self.rate_key}: blocked by a captcha / bot check, paused for {paused // 60} min")
         return html
 
     def open_session(self) -> BrowserSession:

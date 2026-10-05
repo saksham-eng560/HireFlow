@@ -49,7 +49,7 @@ from app.models.resume import Resume
 from app.models.user import User, UserFieldMapping
 from app.schemas.resume_content import ResumeContent
 from app.scrapers import SCRAPERS, ScrapedJob, ScraperError, SearchQuery, detect_ats_platform, fetch_job_from_url
-from app.services import guardrails, llm_usage
+from app.services import guardrails, llm_usage, sources
 from app.services.application_service import set_status
 from app.services.company_verifier import SUSPICIOUS, UNVERIFIED, CompanyCheck, check_job, is_trusted, verify_with_llm
 from app.services.cover_letter import generate_cover_letter
@@ -268,6 +268,25 @@ def verify_companies(db: Session, jobs: list[Job], run: RunLog | None = None, pr
     if run and asked:
         run.log(f"Company check: the AI looked at {asked} unknown compan{'y' if asked == 1 else 'ies'}")
     return asked
+
+
+def _consent_needed(db: Session, user: User, skipped: list[str], run: RunLog) -> None:
+    """Say why a source was left out; the first time, also tell you how to turn it on."""
+    names = ", ".join(sources.GATED_SOURCES[p]["name"] for p in skipped)
+    if settings.DEMO_MODE:
+        run.log(f"Skipped {names}: not available in the demo")
+        return
+    run.log(f"Skipped {names}: their terms forbid automation, so they stay off until you agree to the risk "
+            "in Settings › Job sources")
+    from app.models.user import Notification
+
+    asked = db.scalar(select(Notification.id).where(Notification.user_id == user.id,
+                                                    Notification.event_type == "source_needs_consent").limit(1))
+    if asked is None:
+        notify(db, user, "source_needs_consent", f"{names}: now opt-in",
+               f"{names} don't allow automated access, so HireFlow now uses them only after you agree to the "
+               "risk. Turn them back on in Settings › Job sources if you want them.",
+               link="/dashboard/settings?tab=sources")
 
 
 def scan_platforms(prefs: dict[str, Any], requested: list[str] | None = None) -> list[str]:
@@ -507,11 +526,16 @@ def run_scan(db: Session, user: User, trigger: str = "user", platforms: list[str
         return run.finish("cancelled")
     prefs = user.prefs
     chosen = scan_platforms(prefs, platforms)
+    skipped = sources.missing_consent(user, chosen)  # sites that forbid automation, without your OK
+    if skipped:
+        chosen = [p for p in chosen if p not in skipped]
+        _consent_needed(db, user, skipped, run)
     progress = ScanProgress(db, run.run, [p for p in chosen if p in SCRAPERS])
     try:
         master = get_master_resume(db, user)
         query = SearchQuery.from_preferences(prefs, limit=int(prefs.get("max_jobs_per_source") or settings.MAX_JOBS_PER_SOURCE))
-        query = dataclasses.replace(query, known_urls=known_source_urls(db))
+        query = dataclasses.replace(query, known_urls=known_source_urls(db),
+                                    allowed_gated=frozenset(p for p in sources.GATED_SOURCES if sources.has_consent(user, p)))
         run.log(f"Scanning {', '.join(chosen)} for {', '.join(query.keywords) or 'all roles'}"
                 + (" (internships only)" if query.internships_only else ""))
         progress.set_phase("discovering", f"Searching {len(progress.sources)} job sources at once")

@@ -25,8 +25,8 @@ from bs4 import BeautifulSoup, Tag
 
 from app.automation.browser import BrowserUnavailable
 from app.models.enums import ATSPlatform, ExperienceLevel, JobType
-from app.scrapers.base import ScrapedJob, ScraperError, SearchQuery, parse_date
-from app.scrapers.browser_scraper import BLOCK_MARKERS, BrowserScraper
+from app.scrapers.base import BLOCK_MARKERS, ScrapedJob, ScraperError, SearchQuery, parse_date
+from app.scrapers.browser_scraper import BrowserScraper
 from app.services.text_utils import normalize_text
 
 logger = logging.getLogger(__name__)

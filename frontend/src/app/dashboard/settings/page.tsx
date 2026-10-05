@@ -16,6 +16,7 @@ import { Progress } from "@/components/ui/progress";
 import { Select } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { GatedSources } from "@/components/gated-sources";
 import { cleanProfiles, ProfileLinksEditor, profileErrors } from "@/components/onboarding/profile-links";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
@@ -24,7 +25,8 @@ import { ApiError, api, del, fetcher, patch, post, put } from "@/lib/api-client"
 import type { FieldMapping, Integrations, LLMTestResult, LocationFocus, OllamaPullProgress, OnboardingProfiles, Preferences, StandardField, StudentInfo } from "@/lib/types";
 import { PLATFORM_LABELS, cn, timeAgo } from "@/lib/utils";
 
-const ALL_PLATFORMS = ["internshala", "internships", "greenhouse", "lever", "ashby", "workday", "linkedin", "indeed", "glassdoor", "wellfound", "generic"];
+// LinkedIn, Internshala, Indeed and Glassdoor forbid automation: they're turned on in their own section, with your OK
+const ALL_PLATFORMS = ["internships", "greenhouse", "lever", "ashby", "workday", "wellfound", "generic"];
 const pill = (on: boolean) => cn("rounded-full border px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
   on ? "border-primary bg-primary text-primary-foreground" : "border-foreground/30 hover:border-foreground");
 
@@ -248,7 +250,7 @@ function PreferencesForm({ sourcesOnly = false }: { sourcesOnly?: boolean }) {
           <CardDescription>Where the agent looks. ATS boards use public APIs (fast, no login). Job boards search by your target roles & locations.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Row label="Platforms to scan" hint="Indeed, Glassdoor and Wellfound use a real browser and may need residential proxies to avoid bot blocks.">
+          <Row label="Platforms to scan" hint="Wellfound uses a real browser and may need residential proxies to avoid bot blocks. LinkedIn, Internshala, Indeed and Glassdoor are below: they need your OK first.">
             <div className="flex flex-wrap gap-2">
               {ALL_PLATFORMS.map((p) => (
                 <button key={p} type="button" onClick={() => set("platforms", prefs.platforms.includes(p) ? prefs.platforms.filter((x) => x !== p) : [...prefs.platforms, p])}
@@ -1059,7 +1061,7 @@ function SettingsInner() {
         </TabsList>
         <TabsContent value="mass-apply"><MassApplyPanel /></TabsContent>
         <TabsContent value="preferences"><PreferencesForm /></TabsContent>
-        <TabsContent value="sources"><PreferencesForm sourcesOnly /></TabsContent>
+        <TabsContent value="sources"><div className="space-y-6"><PreferencesForm sourcesOnly /><GatedSources /></div></TabsContent>
         <TabsContent value="answers"><FieldMappingsForm /></TabsContent>
         <TabsContent value="integrations"><IntegrationsPanel /></TabsContent>
         <TabsContent value="profile"><ProfileForm /></TabsContent>

@@ -23,9 +23,10 @@ from app.schemas.user import (
     LinkedInCookieIn,
     PreferencesUpdate,
     ProfileUpdate,
+    SourceConsentIn,
 )
 from app.services import agent_orchestrator as orch
-from app.services import intern_level
+from app.services import intern_level, sources
 from app.services.ai_setup import PullError, connection_test, llm_section, pull_progress, start_pull
 from app.services.google_oauth import has_scope
 from app.services.location_focus import get_season
@@ -151,6 +152,12 @@ def update_preferences(body: PreferencesUpdate, user: CurrentUser, db: DB) -> di
     unknown = set(body.preferences) - ALLOWED_PREF_KEYS
     if unknown:
         raise HTTPException(422, f"Unknown preference keys: {sorted(unknown)}")
+    if "platforms" in body.preferences:  # sites that forbid automation are turned on only with your OK
+        before = user.prefs.get("platforms") or []
+        try:
+            sources.require_consent(user, [p for p in body.preferences["platforms"] or [] if p not in before])
+        except sources.ConsentRequired as exc:
+            raise HTTPException(422, str(exc)) from exc
     prefs = merge_preferences(user.preferences, body.preferences)
     if "max_applications_per_day" not in body.preferences:
         prefs = clamp_daily_cap(prefs)  # a cap saved before the ceiling existed doesn't block other changes
@@ -176,10 +183,40 @@ def progress_report(user: CurrentUser, db: DB) -> dict:
 def apply_preference_preset(name: str, user: CurrentUser) -> dict:
     """One click to mass apply: internships, startups or new-grad roles (your own lists are kept)."""
     try:
-        user.preferences = apply_preset(user.preferences, name)
+        before = user.prefs.get("platforms") or []
+        prefs = apply_preset(user.preferences, name)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
+    # A preset never turns on a site that forbids automation: those need your OK in Settings › Job sources
+    prefs["platforms"] = sources.keep_consented(user, before, prefs.get("platforms") or [])
+    user.preferences = prefs
     return user.prefs
+
+
+# ------------------------------------------------------------------ consent-gated sources
+@router.get("/sources")
+def gated_sources(user: CurrentUser) -> dict:
+    """LinkedIn, Internshala, Indeed, Glassdoor: each with its terms warning and whether you've agreed and it's on."""
+    return {"sources": sources.describe(user)}
+
+
+@router.put("/sources/{platform}")
+def set_gated_source(platform: str, body: SourceConsentIn, user: CurrentUser) -> dict:
+    """Turn a site that forbids automation on (with your OK to its risks, which is recorded) or off (OK withdrawn)."""
+    if platform not in sources.GATED_SOURCES:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not a consent-gated source")
+    platforms = [p for p in user.prefs.get("platforms") or [] if p != platform]
+    if body.enabled:
+        if settings.DEMO_MODE:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Not available in the demo")
+        if not body.agree:
+            raise HTTPException(422, f"Tick “I understand the risk” to turn {sources.GATED_SOURCES[platform]['name']} on")
+        sources.give(user, platform)
+        platforms.append(platform)
+    else:
+        sources.withdraw(user, platform)
+    user.preferences = merge_preferences(user.preferences, {"platforms": platforms})
+    return {"sources": sources.describe(user), "platforms": user.prefs["platforms"]}
 
 
 # ------------------------------------------------------------------ field mappings

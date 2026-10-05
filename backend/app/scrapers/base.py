@@ -48,6 +48,8 @@ class SearchQuery:
     search_terms: list[str] | None = None
     focus: LocationFocus | None = None  # e.g. India with Delhi NCR first (see services/location_focus.py)
     internships_only: bool = False  # drop every posting that isn't an internship (services/intern_level.py)
+    # Sites that forbid automation (services/sources.py) this scan may touch: only the ones you agreed to
+    allowed_gated: frozenset[str] = field(default_factory=frozenset)
     # Postings already in the database: scrapers skip re-downloading their detail pages.
     known_urls: frozenset[str] = field(default_factory=frozenset, repr=False, compare=False)
     # Called as progress(done, total) while a scraper works through boards / pages (scan progress bar).
@@ -258,6 +260,35 @@ def parse_date(value: Any) -> date | None:
 
 
 # --------------------------------------------------------------------------- base class
+# Pages a site shows instead of content: a captcha wants a person; a challenge page (a JavaScript check)
+# is passed by a real browser, which is why some scrapers fall back to one
+CAPTCHA_MARKERS = ("px-captcha", "verify you are human", "unusual traffic", "g-recaptcha", "hcaptcha")
+BLOCK_MARKERS = (*CAPTCHA_MARKERS, "cf-challenge", "challenge-platform", "Just a moment...", "Access Denied")
+
+
+def looks_blocked(html: str) -> bool:
+    return any(marker in html for marker in BLOCK_MARKERS)
+
+
+def wants_a_person(html: str) -> bool:
+    return any(marker in html for marker in CAPTCHA_MARKERS)
+
+
+def retry_after_seconds(value: str | None) -> float | None:
+    """``Retry-After`` as seconds: a number of seconds, or an HTTP date."""
+    if not value:
+        return None
+    value = value.strip()
+    if value.isdigit():
+        return float(value)
+    try:
+        from email.utils import parsedate_to_datetime
+
+        return max(0.0, (parsedate_to_datetime(value) - datetime.now(UTC)).total_seconds())
+    except (TypeError, ValueError):
+        return None
+
+
 class BaseScraper(ABC):
     platform: ATSPlatform = ATSPlatform.UNKNOWN
     rate_key: str = "unknown"
@@ -284,8 +315,11 @@ class BaseScraper(ABC):
                 time.sleep(delays[attempt])
                 continue
             if response.status_code == 429:
-                rate_limiter.pause_platform(self.rate_key)
-                raise RateLimited(f"{self.rate_key} returned HTTP 429")
+                paused = rate_limiter.back_off(self.rate_key, retry_after_seconds(response.headers.get("retry-after")))
+                raise RateLimited(f"{self.rate_key} returned HTTP 429: paused for {paused // 60} min")
+            if response.status_code in (403, 429, 503) and wants_a_person(response.text[:20000]):
+                paused = rate_limiter.back_off(self.rate_key)  # a captcha: stop, never try to get around it
+                raise RateLimited(f"{self.rate_key} asked for a captcha: paused for {paused // 60} min")
             if response.status_code >= 500 and attempt < len(delays):
                 time.sleep(delays[attempt])
                 continue

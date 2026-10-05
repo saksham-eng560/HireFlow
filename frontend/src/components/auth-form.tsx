@@ -97,6 +97,13 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
               <Button type="submit" size="lg" className="w-full" loading={loading}>
                 {mode === "login" ? "Sign in" : "Create account"} <ArrowUpRight />
               </Button>
+              {mode === "register" && (
+                <p className="text-center text-xs text-muted-foreground">
+                  By creating an account you agree to the <Link href="/terms" className="font-semibold text-primary hover:underline">terms</Link> and{" "}
+                  <Link href="/responsible-use" className="font-semibold text-primary hover:underline">responsible use</Link>. See how your data is handled in the{" "}
+                  <Link href="/privacy" className="font-semibold text-primary hover:underline">privacy policy</Link>.
+                </p>
+              )}
             </form>
             {config?.google_enabled && (
               <>

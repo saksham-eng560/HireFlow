@@ -35,7 +35,7 @@ from app.schemas.onboarding import (
     TargetsStep,
     WelcomeStep,
 )
-from app.services import demo
+from app.services import demo, sources
 from app.services.agent_orchestrator import get_master_resume
 from app.services.presets import PRESETS, apply_preset, clamp_daily_cap
 
@@ -176,6 +176,7 @@ def _apply_step(db: Session, user: User, step: int, data: dict[str, Any]) -> Non
         user.profile_links = [link.model_dump() for link in body.profile_links]
     elif isinstance(body, TargetsStep):
         base = apply_preset(user.preferences, body.preset) if body.preset else user.preferences
+        base = {**base, "platforms": sources.keep_consented(user, user.prefs.get("platforms") or [], base.get("platforms") or [])}
         updates = body.model_dump(exclude={"preset", "expected_stipend"}, exclude_none=True)
         _save_preferences(user, updates, base=base)
         _set_mapping(db, user, "expected_stipend", str(body.expected_stipend) if body.expected_stipend is not None else None,
@@ -189,6 +190,8 @@ def _apply_step(db: Session, user: User, step: int, data: dict[str, Any]) -> Non
     elif isinstance(body, ApplyStep):
         _save_preferences(user, body.model_dump())
     elif isinstance(body, ConnectStep):
+        if settings.DEMO_MODE and (body.linkedin_consent or body.internshala_consent):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "LinkedIn and Internshala aren't available in the demo")
         consents = dict(user.consents or {})
         platforms = list(user.prefs.get("platforms") or [])
         for field, (platform, consent_key) in CONSENT_SOURCES.items():

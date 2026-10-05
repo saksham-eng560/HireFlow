@@ -45,7 +45,8 @@ DEFAULT_PREFERENCES: dict[str, Any] = {
     "posted_within_days": 14,
     "scan_enabled": True,
     "scan_interval_hours": 6,
-    "platforms": ["internshala", "linkedin", "internships", "greenhouse", "lever", "ashby", "workday", "generic"],
+    # LinkedIn, Internshala, Indeed and Glassdoor don't allow automation: off until you agree to their terms
+    "platforms": ["internships", "greenhouse", "lever", "ashby", "workday", "generic"],
     # --- Where and when (services/location_focus.py) ---
     # ~country_share % of each scan's new postings stay in the country; prime cities are shown first.
     "location_focus": {
