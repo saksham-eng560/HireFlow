@@ -2,9 +2,11 @@
 export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/+$/, "");
 
 /** Bump with every change to the icons in public/ (and the ?v= in manifest.webmanifest): it busts browsers' favicon caches. */
-export const ICON_VERSION = "2";
+export const ICON_VERSION = "3";
 
 export const GITHUB_URL = process.env.NEXT_PUBLIC_GITHUB_URL || "https://github.com/saksham-eng560/HireFlow";
+/** The one-time Google OAuth client setup behind "Continue with Google". */
+export const GOOGLE_SETUP_URL = `${GITHUB_URL}/blob/main/docs/USER_GUIDE.md#sign-in-with-google`;
 export const AUTHOR = {
   name: process.env.NEXT_PUBLIC_AUTHOR_NAME || "saksham-eng560",
   url: process.env.NEXT_PUBLIC_AUTHOR_URL || "https://github.com/saksham-eng560",

@@ -1,4 +1,4 @@
-"""The public demo's shared account ("Try the demo") and the nightly reset (docs/HIREFLOW_PLAN.md §5.5).
+"""The demo's shared, pre-filled account (the end-to-end tests sign in to it) and the nightly reset (docs/HIREFLOW_PLAN.md §5.5).
 
 The account is the sample candidate from onboarding, with a few past applications at fictional companies
 (so every dashboard page has something to show) and a Swipe Review deck from the bundled demo careers

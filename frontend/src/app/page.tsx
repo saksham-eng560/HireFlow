@@ -6,7 +6,6 @@ import {
   Layers, MailCheck, PauseCircle, Search, Send, ShieldCheck, Timer, X,
 } from "lucide-react";
 import { BrushHeadline, Logo, TagPile, TunnelGrid } from "@/components/brand";
-import { TryDemoButton } from "@/components/demo";
 import { ArchitectureDiagram, STACK } from "@/components/landing/architecture";
 import { Faq, FAQS } from "@/components/landing/faq";
 import { GithubMark } from "@/components/landing/github-mark";
@@ -105,7 +104,6 @@ export default function Landing() {
             </p>
             <div className="mt-10 flex flex-wrap items-center gap-4">
               <Link href="/register" className={buttonVariants({ size: "xl" })}>Get started <ArrowRight /></Link>
-              <TryDemoButton size="xl" />
               <a href={GITHUB_URL} className={buttonVariants({ size: "xl", variant: "outline" })}>
                 <GithubMark className="h-5 w-5" /> View on GitHub
               </a>
@@ -281,7 +279,6 @@ export default function Landing() {
           <h2 className="display text-4xl sm:text-6xl">Your next<br /><span className="text-primary">internship</span> is<br />one swipe away</h2>
           <div className="flex flex-wrap gap-4">
             <Link href="/register" className={buttonVariants({ size: "xl" })}>Create your agent <ArrowUpRight /></Link>
-            <TryDemoButton size="xl" />
           </div>
         </section>
 

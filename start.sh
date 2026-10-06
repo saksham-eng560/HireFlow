@@ -3,7 +3,7 @@
 #  HireFlow — one command to set up and run everything.
 #
 #    ./start.sh              local mode: no Docker needed (SQLite; Redis + Celery if installed)
-#    ./start.sh --demo       the public demo: "Try the demo" one-click login, fictional jobs, nothing really sent
+#    ./start.sh --demo       practice mode: fictional jobs on a sample careers site, nothing really sent
 #    ./start.sh --sample     also seed a sample account and serve the standalone demo careers site on :8765
 #    ./start.sh --docker     full stack in Docker Compose (PostgreSQL, Redis, worker, beat)
 #    ./start.sh --stop       stop the Docker stack
@@ -25,11 +25,11 @@ API_PORT="${API_PORT:-8000}"; WEB_PORT="${WEB_PORT:-3000}"; DEMO_PORT="${DEMO_PO
 LOG_DIR="$ROOT/logs"
 
 if [ -t 1 ]; then
-  RED=$'\033[38;5;203m'; DIM=$'\033[2m'; BOLD=$'\033[1m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; RESET_C=$'\033[0m'
+  RED=$'\033[38;5;203m'; BLUE=$'\033[38;5;33m'; DIM=$'\033[2m'; BOLD=$'\033[1m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; RESET_C=$'\033[0m'
 else
-  RED=""; DIM=""; BOLD=""; GREEN=""; YELLOW=""; RESET_C=""
+  RED=""; BLUE=""; DIM=""; BOLD=""; GREEN=""; YELLOW=""; RESET_C=""
 fi
-say()  { printf '%s\n' "${RED}▌${RESET_C} $*"; }
+say()  { printf '%s\n' "${BLUE}▌${RESET_C} $*"; }
 ok()   { printf '%s\n' "${GREEN}✓${RESET_C} $*"; }
 warn() { printf '%s\n' "${YELLOW}!${RESET_C} $*"; }
 die()  { printf '%s\n' "${RED}✗ $*${RESET_C}" >&2; exit 1; }
@@ -53,7 +53,7 @@ for arg in "$@"; do
 done
 
 banner() {
-  printf '\n%s\n' "${BOLD}  [▪ HireFlow${RESET_C}  ${DIM}— swipe right, we apply${RESET_C}"
+  printf '\n%s\n' "  ${BLUE}■${RESET_C} ${BOLD}HireFlow${RESET_C}  ${DIM}— swipe right, we apply${RESET_C}"
   printf '%s\n\n' "${DIM}  ────────────────────────────────────────────${RESET_C}"
 }
 
@@ -415,7 +415,7 @@ fi
 
 if [ "$DEMO" = 1 ]; then
   export DEMO_MODE=true  # the API seeds the shared demo account on start-up
-  ok "Demo mode: press \"Try the demo\" on the home page. Applications go to fictional companies; nothing is really sent."
+  ok "Practice mode: its own database; applications go to fictional companies and nothing is really sent."
 fi
 if [ "$SAMPLE" = 1 ]; then
   "$PY" scripts/seed_db.py >"$LOG_DIR/seed.log" 2>&1 && ok "Sample account: demo@example.com / demo-password-123" || warn "Seeding skipped (see logs/seed.log)"
@@ -452,8 +452,8 @@ printf '  %s   %s\n' "${BOLD}API docs${RESET_C}" "http://localhost:$API_PORT/doc
 printf '  %s     %s\n' "${BOLD}Queue${RESET_C}" "$QUEUE_NOTE"
 printf '  %s      %s\n\n' "${BOLD}Logs${RESET_C}" "logs/*.log"
 if [ "$DEMO" = 1 ]; then
-  printf '%s\n' "${DIM}  Open the dashboard and press \"Try the demo\": swipe right to keep a job, then see it filled in"
-  printf '%s\n\n' "  Ready to submit. Nothing is really sent. Ctrl-C stops everything.${RESET_C}"
+  printf '%s\n' "${DIM}  Practice mode: create any account (it stays in the practice database), press Load sample profile,"
+  printf '%s\n\n' "  scan, and swipe right to keep a job. Nothing is really sent. Ctrl-C stops everything.${RESET_C}"
 else
   printf '%s\n' "${DIM}  First time? Create your account → upload your resume → Settings › Mass apply › Internships"
   printf '%s\n\n' "  preset → save your visa / work-authorization answers → Scan → swipe. Ctrl-C stops everything.${RESET_C}"

@@ -31,11 +31,14 @@ def test_signing_in_without_a_server_says_so(page: Page, answer: object) -> None
     expect(page.get_by_text("Request failed")).to_have_count(0)
 
 
-def test_try_the_demo_without_a_server_says_so(page: Page) -> None:
-    page.goto(BASE)
-    page.route("**/api/v1/auth/demo", _proxy_404)
-    page.get_by_role("button", name="Try the demo").first.click()
-    expect(page.get_by_text(MESSAGE).first).to_be_visible()
+def test_creating_an_account_without_a_server_says_so(page: Page) -> None:
+    page.goto(f"{BASE}/register")
+    page.route("**/api/v1/auth/register", _proxy_404)
+    page.get_by_label("Full name").fill("Someone")
+    page.get_by_label("Email").fill("someone@example.com")
+    page.get_by_label("Password").fill("a-password-123")
+    page.get_by_role("button", name="Create account").last.click()
+    expect(page.get_by_text(MESSAGE)).to_be_visible()
 
 
 def test_real_api_errors_keep_their_own_message(page: Page) -> None:

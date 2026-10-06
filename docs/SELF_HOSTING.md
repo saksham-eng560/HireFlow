@@ -17,7 +17,7 @@ your browser and streams the logs. **Ctrl-C stops everything.**
 | Command | What it does |
 |---|---|
 | `./start.sh` | Local mode, no Docker. Uses Redis + a Celery worker + beat if `redis-server` is installed, otherwise runs tasks in-process with a built-in scheduler (scheduled scans still happen). |
-| `./start.sh --demo` | Demo mode: **Try the demo** signs in to a seeded account in one click, applications go to a bundled careers site with fictional companies, nothing real is sent, and everything resets nightly. |
+| `./start.sh --demo` | Practice mode, with its own database: create any account, applications go to a bundled careers site with fictional companies, nothing real is sent, and everything resets nightly. |
 | `./start.sh --sample` | Also seeds a sample account (`demo@example.com` / `demo-password-123`) with a swipe deck, and serves the standalone sample careers site on :8765. |
 | `./start.sh --prod` | Production build of the dashboard (faster pages). |
 | `./start.sh --docker` | The full Docker Compose stack (PostgreSQL + pgvector, Redis, worker, beat). `./start.sh --stop` stops it. |

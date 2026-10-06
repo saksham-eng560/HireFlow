@@ -27,9 +27,9 @@ export const FAQS: { q: string; a: string }[] = [
       "AI-written answer, which you can edit before it goes out. Dry run fills forms without ever pressing Submit.",
   },
   {
-    q: "What does the demo do?",
-    a: "It runs the whole loop against a bundled careers site with fictional companies. Nothing reaches a real " +
-      "employer, sign-ins to real services are off, and all data is wiped every night.",
+    q: "Can I sign in with Google?",
+    a: "Yes. “Continue with Google” signs you in, or creates your account the first time, once the computer " +
+      "running HireFlow has a free Google OAuth client set up (about five minutes, once). Email and password always work.",
   },
   {
     q: "Which AI does it use, and what does it cost?",

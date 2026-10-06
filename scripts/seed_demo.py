@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The public demo's shared account ("Try the demo"). Needs DEMO_MODE=true.
+"""The demo's shared, pre-filled account (the end-to-end tests sign in to it). Needs DEMO_MODE=true.
 
     python scripts/seed_demo.py            # create it if it's missing (the API also does this when it starts)
     python scripts/seed_demo.py --reset    # the nightly reset, right now: every account and job wiped, demo re-created

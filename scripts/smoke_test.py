@@ -4,7 +4,7 @@
     python3 scripts/smoke_test.py --site http://localhost:3000 --api http://localhost:8000 --demo
 
 --site is the dashboard; --api is the API's own URL, optional. --demo (with ./start.sh --demo) also checks the
-demo: "Try the demo" signs in, the deck is full, dry run is on, and the demo careers site answers. Every check
+demo: the demo sign-in works, the deck is full, dry run is on, and the demo careers site answers. Every check
 prints a line; the exit code is 1 if any failed. --timeout is per request.
 """
 
@@ -104,7 +104,7 @@ def main() -> int:
         print("Demo")
         run.check("demo mode is on", config.get("demo_mode") is True, f"demo_mode={config.get('demo_mode')}")
         status, _, body = http.request("POST", f"{site}/api/v1/auth/demo", body={}, headers={"Origin": site})
-        run.check('"Try the demo" signs in', status == 200, f"HTTP {status}: {body[:200]!r}")
+        run.check("the demo sign-in works", status == 200, f"HTTP {status}: {body[:200]!r}")
         status, _, body = http.request("GET", f"{site}/api/v1/auth/me")
         me = _json(body) or {}
         run.check("signed in as the demo account", status == 200 and (me.get("preferences") or {}).get("dry_run") is True,

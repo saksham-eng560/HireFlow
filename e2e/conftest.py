@@ -38,3 +38,12 @@ def page(browser: Browser) -> Iterator[Page]:
 def phone(browser: Browser) -> Iterator[Page]:
     """A phone-sized touch screen."""
     yield from _page(browser, {"width": 390, "height": 844}, has_touch=True, is_mobile=True)
+
+
+def open_demo_account(page: Page) -> None:
+    """Sign in to the demo's shared, pre-filled account (demo mode only; the site has no button for it), then open
+    the dashboard."""
+    response = page.request.post(f"{BASE}/api/v1/auth/demo")
+    assert response.ok, response.text()
+    page.goto(f"{BASE}/dashboard")
+    page.wait_for_url("**/dashboard", timeout=60_000)

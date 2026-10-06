@@ -39,15 +39,22 @@ class GoogleAuthError(Exception):
     pass
 
 
-def build_auth_url(mode: str, user_id: str | None = None, redirect_after: str | None = None) -> str:
-    """mode='login' (sign in/up with Google) or 'connect' (grant Gmail/Calendar to an existing user)."""
+STATE_MINUTES = 15  # how long the Google consent screen may take
+
+
+def build_auth_url(mode: str, user_id: str | None = None, redirect_after: str | None = None,
+                   nonce: str | None = None) -> str:
+    """mode='login' (sign in/up with Google) or 'connect' (grant Gmail/Calendar to an existing user).
+
+    ``nonce`` is also kept in a cookie of the browser that started, so the callback only accepts Google's answer there.
+    """
     if not settings.google_configured:
         raise GoogleNotConfigured("GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are not set")
     state = create_token(
         user_id or "anonymous",
         scope="oauth_state",
-        expires_delta=timedelta(minutes=15),
-        extra={"mode": mode, "next": redirect_after or "/dashboard/settings"},
+        expires_delta=timedelta(minutes=STATE_MINUTES),
+        extra={"mode": mode, "next": redirect_after or "/dashboard/settings", "nonce": nonce or ""},
     )
     scopes = LOGIN_SCOPES + (INTEGRATION_SCOPES if mode == "connect" else [])
     params = {
