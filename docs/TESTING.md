@@ -59,7 +59,7 @@ throwaway database in demo mode with no AI keys, so anyone can reproduce it:
 | Forms filled on the demo careers site (Chromium, dry run) | 12 of 12, every required field filled |
 | Time per kept job (tailor, cover letter, fill) | about 2 s median |
 | Tests | 445 backend (pytest) + 19 end-to-end (Playwright) |
-| Backend coverage | 80% of `app/` (`--coverage`) |
+| Backend coverage | 81% of `app/` (`--coverage`) |
 
 Fill rates on real Greenhouse, Lever, Ashby and Workday postings can only come from real use:
 `scripts/metrics.py --from-db "$DATABASE_URL"` reports them per ATS from your own database, along with jobs
