@@ -157,7 +157,7 @@ jobs:
         run: |
           npm ci
           npm run build
-      - name: Happy path, Try the demo, landing + SEO, phone swipe, accessibility (axe)
+      - name: Happy path, Google sign-in button, landing + SEO, phone swipe, accessibility (axe)
         env:
           E2E_LOGS: ${{ runner.temp }}
         run: scripts/e2e.sh
