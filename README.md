@@ -102,6 +102,17 @@ LLM fallback works: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 ## Quick start
 
 Works on **macOS, Linux and Windows (with WSL)**. You need **Git**, **Python 3.11+** and **Node.js 20+**.
+Everything else is optional:
+
+| | Needed? | What it adds | Set up in |
+|---|---|---|---|
+| Git, Python, Node.js | **Yes** | Runs HireFlow (`./start.sh` installs the rest itself, including the browser it fills forms with) | [below](#1-get-it) |
+| Ollama (a desktop app) | No | Free AI on your own computer: better matching, tailored resumes, cover letters | [step 4](#4-free-ai-with-ollama-optional) |
+| HireFlow Chrome extension | No | Only for LinkedIn and Internshala: lets the agent use your own login there | [step 5](#5-chrome-extension-for-linkedin-and-internshala-optional) |
+| Claude API key, Google account | No | The best AI; reply and interview tracking from Gmail and Calendar | [step 6](#6-other-add-ons-optional) |
+
+> **Copying commands on a Mac:** paste one command at a time, as shown. Don't add notes after a `#` on the
+> same line: the Mac's shell (zsh) doesn't treat them as comments.
 
 <details>
 <summary><b>Don't have them yet?</b> (click)</summary>
@@ -154,22 +165,95 @@ sample profile** fills everything in.) Your data stays in `backend/data/` on you
 ### 4. Free AI with Ollama (optional)
 
 HireFlow works without any AI, on built-in matching and templates. For better matching, tailoring and cover
-letters, run a free AI model on your own computer with [Ollama](https://ollama.com), no account or key needed:
+letters, run a free AI model on your own computer with [Ollama](https://ollama.com): no account, no key, and
+nothing leaves your computer. Ollama is a **desktop app**, not a browser extension: HireFlow talks to it directly.
 
-1. Install Ollama: **Mac** – download the app from https://ollama.com/download and open it once;
-   **Linux / WSL** – `curl -fsSL https://ollama.com/install.sh | sh`.
-2. Start HireFlow with it (add `--demo` to use it in the demo):
+1. **Install Ollama.**
+   - **Mac:** download it from https://ollama.com/download, drag **Ollama** to Applications and open it once. A
+     llama icon appears in the menu bar: it's running.
+   - **Linux / WSL:** run `curl -fsSL https://ollama.com/install.sh | sh` (it starts by itself).
+   - **Windows:** run HireFlow in WSL and install Ollama there with the Linux line above.
+2. **Check it's running** (it prints a version number):
+
+   ```bash
+   curl http://localhost:11434/api/version
+   ```
+
+3. **Start HireFlow with it.** Stop HireFlow first if it's running (**Ctrl-C**), then:
 
    ```bash
    ./start.sh --ollama
    ```
 
-   The first time, it downloads the default model `qwen3.5:4b` (about 3.4 GB, good for 8–16 GB of RAM) and adds
-   `LLM_PROVIDER=ollama` and `OLLAMA_MODEL=qwen3.5:4b` to `.env`. After that, plain `./start.sh` keeps using it.
-3. In the dashboard: **Settings › Integrations › AI model › Test AI**.
+   The first time, it downloads the AI model `qwen3.5:4b` (about 3.4 GB, with a progress bar; good for a computer
+   with 8–16 GB of RAM) and saves the choice in `.env`. After that, plain `./start.sh` (or `./start.sh --demo`)
+   keeps using it: you only need `--ollama` once.
+4. **Test it.** In the dashboard, open **Settings › Integrations**, find the **AI model** card and press
+   **Test AI**. It shows the model's answer and how long it took. The first answer is slower while the model
+   loads.
 
-Another model (smaller for 8 GB, bigger for 16 GB+), Ollama in Docker, Ollama Cloud and troubleshooting:
-**[docs/OLLAMA.md](docs/OLLAMA.md)**. Prefer Claude? Put `ANTHROPIC_API_KEY=...` in `.env` (with a text editor).
+Keep the Ollama app running whenever you use HireFlow: `./start.sh` warns you if it isn't, and `./start.sh --ollama`
+opens it for you on a Mac.
+A smaller model for 8 GB of RAM, a bigger one for 16 GB+, Ollama in Docker, Ollama Cloud and troubleshooting:
+**[docs/OLLAMA.md](docs/OLLAMA.md)**.
+
+### 5. Chrome extension for LinkedIn and Internshala (optional)
+
+You **don't** need this for anything else: Greenhouse, Lever, Ashby, Workday, careers pages and the demo all work
+without it. LinkedIn and Internshala only accept applications from your own logged-in account, so the HireFlow
+extension copies your login there (the session cookie) to your own HireFlow. It sends it nowhere else.
+
+These sites don't allow automation in their terms and can restrict accounts they think are automated, so they're
+**off until you turn them on**. Use them at your own risk.
+
+**A. Turn the site on in HireFlow.** Open **Settings › Job sources**, scroll to **Sites that don't allow
+automation**, tick *I understand the risk…* next to LinkedIn and/or Internshala, and press **Turn on**.
+
+**B. Add the extension to Chrome** (Edge, Brave and other Chromium browsers work the same way; Safari and
+Firefox don't):
+
+1. Open a new tab and go to `chrome://extensions`.
+2. Turn on **Developer mode** (the switch at the top right).
+3. Click **Load unpacked** (top left) and choose the **`extension`** folder inside your HireFlow folder.
+   On a Mac, press **Cmd-Shift-G** in that window and type `~/HireFlow/extension`, then **Select**.
+4. **HireFlow — Session Sync** appears in the list. Click the puzzle-piece icon in Chrome's toolbar and pin
+   **HireFlow** so its blue "H" icon stays visible.
+
+Keep the HireFlow folder where it is: Chrome loads the extension from it.
+
+**C. Connect the extension to HireFlow** (HireFlow must be running):
+
+1. In HireFlow, open **Settings › Integrations**, find the **LinkedIn — Chrome extension** card and press
+   **Generate extension token**. Copy the token with the copy button.
+2. Click the HireFlow icon in Chrome's toolbar. Enter:
+   - **Dashboard URL:** `http://localhost:3000`
+   - **Extension token:** paste the token
+3. Press **Save settings**, then **Allow** when Chrome asks to let the extension reach `localhost:3000`.
+
+**D. Sync your login.**
+
+- **LinkedIn:** log in at https://www.linkedin.com in the same Chrome, open the extension and press
+  **Sync LinkedIn session**.
+- **Internshala:** log in at https://internshala.com, open the extension and press **Sync Internshala
+  session**. To let the agent apply there too, turn on **Let the agent apply on Internshala** on the
+  **Internshala — apply bot** card in **Settings › Integrations** and read the warning.
+
+**Settings › Integrations** now shows **Session synced**. While Chrome is open, the extension re-syncs every 12
+hours and whenever the site renews your login. The token works for 180 days and can only sync these two logins;
+press **Disconnect** on the card to remove a synced login. After `git pull`, press the reload icon on the
+extension's card in `chrome://extensions`. The extension is turned off in the demo. More:
+[docs/USER_GUIDE.md](docs/USER_GUIDE.md#linkedin-internshala-and-the-chrome-extension).
+
+### 6. Other add-ons (optional)
+
+| Add-on | What it adds | How |
+|---|---|---|
+| **Claude API key** | The best AI for tailoring, cover letters and answers (paid, per use) | Create a key at https://console.anthropic.com, open `.env` in a text editor, set `ANTHROPIC_API_KEY=` to it, restart. With Ollama set up too, see [which goes first](docs/OLLAMA.md#switch-models-or-turn-it-off). |
+| **Gmail and Google Calendar** | Replies, rejections and interview invites tracked from your inbox; interviews on your calendar | Create a free Google OAuth client, put `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env`, restart, then **Settings › Integrations › Connect Google account**. Step by step: [docs/USER_GUIDE.md](docs/USER_GUIDE.md#connect-gmail-and-google-calendar). |
+| **Practice careers site** | A fake company with real forms, to watch the whole loop before applying for real | `./start.sh --sample`, then follow [docs/USER_GUIDE.md](docs/USER_GUIDE.md#try-the-whole-loop-on-the-sample-careers-site). |
+
+Restart means **Ctrl-C** in the HireFlow terminal, then `./start.sh` again. Keys stay in `.env` on your computer:
+never share them or put them in git.
 
 ### Everyday commands
 
@@ -194,7 +278,13 @@ Another model (smaller for 8 GB, bigger for 16 GB+), Ollama in Docker, Ollama Cl
 | `Port 3000 is already in use` | Another app (or an earlier HireFlow) uses it: close it, or `WEB_PORT=3001 ./start.sh`. Same for 8000 with `API_PORT`. |
 | "Can't reach the HireFlow server right now" in the browser | The API isn't running: look at the terminal for an error, or check `logs/api.log`. |
 | `Chromium install failed` | Form filling needs it. Run `backend/.venv/bin/python -m playwright install chromium` (on Linux add `--with-deps`). |
+| `Unknown option: #` or `zsh: unknown file attribute` | You pasted a note after a command. Paste only the command itself, one per line. |
 | `Ollama isn't running` | Open the Ollama app (Mac) or run `ollama serve`. More in [docs/OLLAMA.md](docs/OLLAMA.md#troubleshooting). |
+| Test AI is slow or times out | Normal for the first answer while the model loads. If it stays slow, use a smaller model: [docs/OLLAMA.md](docs/OLLAMA.md#which-model-to-choose). |
+| No **Load unpacked** button in `chrome://extensions` | Turn on **Developer mode** (top right). |
+| Extension says "Token rejected" | Generate a new token in **Settings › Integrations** and paste it into the extension again. |
+| Extension says "Permission to contact your dashboard was denied" | Press **Save settings** again and choose **Allow**. |
+| "Session expired" in Settings › Integrations | Log in to LinkedIn (or Internshala) in Chrome again and press **Sync** in the extension. |
 | Forgot your password | `backend/.venv/bin/python scripts/account.py reset-password you@example.com` |
 | Anything else | Logs are in `logs/` (`api.log`, `web.log`). |
 </details>
