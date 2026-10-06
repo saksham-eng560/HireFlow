@@ -47,6 +47,7 @@ for arg in "$@"; do
     --ollama) OLLAMA=1 ;;
     --no-open) OPEN_BROWSER=0 ;;
     -h|--help) usage ;;
+    '#'*) break ;;  # zsh passes a pasted "# comment" on as arguments: ignore it and the rest
     *) die "Unknown option: $arg (see ./start.sh --help)" ;;
   esac
 done
