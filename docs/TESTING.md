@@ -24,6 +24,10 @@ against saved fixtures, and real-browser tests:
   caps, duplicates, the undo window, pause, dry run, truthfulness, prompt injection, output validation,
   budgets, CSRF, uploads, PII in logs, data export and deletion, consent-gated sources, back-off, and that
   the demo never reaches a real site.
+- `test_import_autoapply.py` brings a real AutoApply AI layout over (database in WAL mode with a pending change,
+  stored files, `.env`): every row and file arrives, the keys and personal settings come along, machine settings
+  don't, secrets are never printed, HireFlow's new columns and indexes are added, existing HireFlow accounts are
+  never overwritten without `--replace`, and the AutoApply folder is byte-for-byte unchanged.
 - `test_google_signin.py` runs **Continue with Google** end to end with Google faked: a new account is created,
   an existing one with the same email is signed in, an unverified email, a cancel, a closed registration or a
   disabled account is turned away, and Google's answer only counts in the browser that started the sign-in
@@ -58,7 +62,7 @@ throwaway database in demo mode with no AI keys, so anyone can reproduce it:
 | First scan of the demo careers site | 12 postings found and in the deck in about 0.3 s |
 | Forms filled on the demo careers site (Chromium, dry run) | 12 of 12, every required field filled |
 | Time per kept job (tailor, cover letter, fill) | about 2 s median |
-| Tests | 445 backend (pytest) + 19 end-to-end (Playwright) |
+| Tests | 451 backend (pytest) + 19 end-to-end (Playwright) |
 | Backend coverage | 81% of `app/` (`--coverage`) |
 
 Fill rates on real Greenhouse, Lever, Ashby and Workday postings can only come from real use:

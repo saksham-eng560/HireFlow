@@ -95,18 +95,38 @@ Scheduled scans need beat and Redis.
 
 ### Coming from AutoApply AI
 
-HireFlow was previously called AutoApply AI. The database name changed with it: `hireflow` (user,
-password and database) in Docker, and `backend/data/hireflow.db` for `./start.sh`. A fresh install
-starts empty. To keep your old data:
+HireFlow was previously called AutoApply AI. Every feature, setting and page carried over, and your data can too.
+A fresh install starts empty; to keep your old data:
 
-- **Local SQLite** (`./start.sh`): copy `backend/data/autoapply.db` to `backend/data/hireflow.db`.
-- **PostgreSQL**: point `DATABASE_URL` at your old database and run `cd backend && alembic stamp --purge 0001`
-  once. The six old migrations are now one revision, so this marks the existing schema as current.
-- Either way, keep the same `SECRET_KEY` / `ENCRYPTION_KEY` so stored tokens stay readable. Everyone
-  signs in once more, because the session cookie is now `hireflow_session`.
-- Applications you logged by hand without a link have a placeholder URL with the old name. To fix them,
-  run `UPDATE jobs SET source_url = replace(source_url, 'https://manual.autoapply.invalid/', 'https://manual.hireflow.invalid/') WHERE source_url LIKE 'https://manual.autoapply.invalid/%';`
-- Reload the unpacked Chrome extension from the `extension/` folder.
+**Local (`./start.sh`), one command.** Stop both apps (**Ctrl-C**), then in the HireFlow folder:
+
+```bash
+backend/.venv/bin/python scripts/import_autoapply.py ~/autoapply-ai
+```
+
+(Use the path of your AutoApply AI folder, the one with its `start.sh`. Run `./start.sh` once first if
+`backend/.venv` doesn't exist yet.) It copies, and never changes anything in the AutoApply folder:
+
+- the database (`backend/data/autoapply.db` becomes `backend/data/hireflow.db`): accounts and passwords, resumes,
+  jobs, swipes, applications, answers, interviews, e-mails and settings, including changes still in its `-wal` file;
+- the stored files (`backend/data/storage`: uploaded resumes, generated PDFs, form screenshots);
+- `SECRET_KEY` and `ENCRYPTION_KEY` from AutoApply's `.env`, so saved LinkedIn, Internshala, Google and ATS logins
+  stay readable, plus your own settings (AI keys, Google client, Ollama, SMTP...) wherever HireFlow's `.env` has
+  none yet. Machine settings (database, URLs) are never copied, and only names are printed, never values.
+
+Then it adds HireFlow's new columns and indexes; accounts that already existed skip the first-run onboarding.
+If HireFlow already has accounts it stops; `--replace` swaps them for your AutoApply data and keeps the old
+`hireflow.db` and `.env` as `.bak-<date>` copies. `./start.sh` and `scripts/account.py where` point to it when
+they find an AutoApply AI folder next to HireFlow.
+
+**PostgreSQL (Docker or your own server).** Keep the same `SECRET_KEY` and `ENCRYPTION_KEY` in `.env`, point
+`DATABASE_URL` at your old database, and run `cd backend && alembic stamp --purge 0001` once. The six old
+migrations are now one revision, so this marks the existing schema as current; the next start applies HireFlow's
+own migrations on top. Copy the stored files too if you use local storage.
+
+Either way, everyone signs in once more (the session cookie is now `hireflow_session`), and the Chrome extension
+is loaded again from HireFlow's `extension/` folder, with a new token from **Settings › Integrations**.
+Applications you logged without a link keep their old placeholder, which HireFlow hides like its own.
 
 Other useful commands:
 

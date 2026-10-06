@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/saksham-eng560/HireFlow/actions/workflows/ci.yml"><img src="https://github.com/saksham-eng560/HireFlow/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <a href="docs/TESTING.md"><img src="https://img.shields.io/badge/tests-445%20backend%20%2B%2019%20e2e-2563EB" alt="Tests" /></a>
+  <a href="docs/TESTING.md"><img src="https://img.shields.io/badge/tests-451%20backend%20%2B%2019%20e2e-2563EB" alt="Tests" /></a>
   <a href="docs/TESTING.md"><img src="https://img.shields.io/badge/coverage-81%25-2563EB" alt="Coverage" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2563EB" alt="MIT license" /></a>
 </p>
@@ -157,6 +157,11 @@ dashboard) and creates `.env` with fresh secrets. Later runs start in seconds. Y
    submit** with a screenshot of the form. Nothing is sent until you press **Submit application**.
 
 Your data stays in `backend/data/` on your computer.
+
+> **Used AutoApply AI before?** (HireFlow's old name.) Bring your account, resumes, applications and saved logins
+> over with one command, after stopping both apps:
+> `backend/.venv/bin/python scripts/import_autoapply.py ~/autoapply-ai`
+> ([details](docs/SELF_HOSTING.md#coming-from-autoapply-ai)). It never changes the AutoApply folder.
 
 > **Want to practise first?** `./start.sh --demo` starts a separate practice copy with its own database: scans find
 > fictional companies on a bundled careers site, and nothing is ever sent. Create any account there (press **Load
@@ -364,7 +369,7 @@ make lint        # ruff, ESLint, TypeScript, colour contrast
 make metrics     # measure the numbers below
 ```
 
-Measured with `scripts/metrics.py`, not guessed: **445 backend tests (81% coverage) and 19 end-to-end tests**; on the demo
+Measured with `scripts/metrics.py`, not guessed: **451 backend tests (81% coverage) and 19 end-to-end tests**; on the demo
 careers site the first scan takes about 0.3 s, sign-up to the first Swipe Review deck takes under a second of
 server time (about 5 s through the UI), and 12 of 12 forms are filled in Chromium with every required field.
 CI runs all of it plus migrations, security audits and Docker builds on every push: [docs/TESTING.md](docs/TESTING.md).

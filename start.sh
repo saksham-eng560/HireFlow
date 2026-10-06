@@ -408,6 +408,13 @@ except Exception: print(0)' "$ROOT/backend/data/$DB_NAME.db" 2>/dev/null || echo
   if [ "${ACCOUNTS:-0}" = 0 ]; then
     warn "No accounts in this copy's database yet. Sign up at /register, or if you had one, find it with:"
     warn "  $PY scripts/account.py where"
+    for OLD_DB in "$ROOT"/../*/backend/data/autoapply.db; do  # AutoApply AI, this project's old name, next door
+      [ -f "$OLD_DB" ] || continue
+      OLD_DIR="$(cd "$(dirname "$OLD_DB")/../.." && pwd)"
+      warn "Used AutoApply AI? Your data is in $OLD_DIR. Stop HireFlow (Ctrl-C) and bring it over with:"
+      warn "  $PY scripts/import_autoapply.py \"$OLD_DIR\""
+      break
+    done
   else
     ok "$ACCOUNTS account(s) in this database (forgot the password? $PY scripts/account.py reset-password <email>)"
   fi

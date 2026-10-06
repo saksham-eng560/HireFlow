@@ -225,3 +225,25 @@ def test_existing_users_skip_onboarding_after_upgrade(db) -> None:
     db.expire_all()
     user = db.query(User).filter_by(email="old@example.com").one()
     assert user.onboarding_completed_at is not None and user.onboarding_step == 8
+
+
+def test_an_index_the_old_rows_cannot_take_never_blocks_start_up(db, caplog) -> None:
+    """Upgrading an old local database adds new indexes; one its rows can't satisfy is logged, not fatal."""
+    from sqlalchemy import Index
+
+    from app.core.database import create_all, engine
+    from app.models.user import User
+
+    if engine.dialect.name != "sqlite":
+        pytest.skip("SQLite only (PostgreSQL is upgraded by Alembic)")
+    db.add_all([User(email="a@example.com", full_name="Same Name", preferences={}),
+                User(email="b@example.com", full_name="Same Name", preferences={})])
+    db.commit()
+    index = Index("ux_test_unique_names", User.__table__.c.full_name, unique=True)
+    try:
+        with caplog.at_level("WARNING", logger="app.core.database"):
+            create_all()
+        assert "ux_test_unique_names not added" in caplog.text
+    finally:
+        User.__table__.indexes.discard(index)
+    assert db.query(User).count() == 2
