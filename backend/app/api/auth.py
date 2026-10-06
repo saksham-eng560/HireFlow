@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hmac
 import logging
+import secrets
 import uuid
 from datetime import timedelta
 from urllib.parse import urlencode
@@ -80,7 +82,7 @@ def login(request: Request, body: LoginRequest, response: Response, db: DB) -> d
 @router.post("/demo")
 @limiter.limit(settings.RATE_LIMIT_DEMO)
 def try_the_demo(request: Request, response: Response, db: DB) -> dict:
-    """"Try the demo": one click signs you in to the shared demo account (re-created every night)."""
+    """Demo mode only: signs in to the shared, pre-filled demo account (the end-to-end tests use it; re-created nightly)."""
     if not settings.DEMO_MODE:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
     from app.services.demo_seed import ensure_demo_account
@@ -123,12 +125,27 @@ def extension_token(user: CurrentUser) -> dict:
 
 
 # --------------------------------------------------------------------------- Google OAuth
+# The browser that starts a Google sign-in or connect keeps a random nonce in this cookie; the same nonce is in the
+# signed state. The callback accepts Google's answer only when both match, so nobody can finish it in your browser.
+OAUTH_COOKIE = "hireflow_oauth"
+OAUTH_COOKIE_PATH = f"{settings.API_PREFIX}/auth/google"
+
+
+def _remember_nonce(response: Response, nonce: str) -> None:
+    response.set_cookie(
+        OAUTH_COOKIE, nonce, httponly=True, secure=settings.COOKIE_SECURE, samesite="lax",
+        max_age=google_oauth.STATE_MINUTES * 60, path=OAUTH_COOKIE_PATH,
+    )
+
+
 @router.get("/google/login", dependencies=[NotInDemo])
 def google_login(next: str | None = None) -> RedirectResponse:
-    try:
-        return RedirectResponse(google_oauth.build_auth_url("login", redirect_after=next or "/dashboard"))
-    except google_oauth.GoogleNotConfigured as exc:
-        raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, str(exc)) from exc
+    if not settings.google_configured:  # the sign-in page explains how to set it up
+        return RedirectResponse(_frontend("/login", error="google_not_configured"))
+    nonce = secrets.token_urlsafe(24)
+    response = RedirectResponse(google_oauth.build_auth_url("login", redirect_after=next or "/dashboard", nonce=nonce))
+    _remember_nonce(response, nonce)
+    return response
 
 
 # Where "Connect Gmail & Calendar" may send you back to (a fixed list: never an open redirect)
@@ -136,12 +153,13 @@ CONNECT_RETURN_PATHS = ("/dashboard/settings", "/onboarding")
 
 
 @router.get("/google/connect", dependencies=[NotInDemo])
-def google_connect(user: CurrentUser, next: str = "/dashboard/settings") -> dict:
+def google_connect(user: CurrentUser, response: Response, next: str = "/dashboard/settings") -> dict:
     redirect_after = next if next in CONNECT_RETURN_PATHS else "/dashboard/settings"
-    try:
-        return {"url": google_oauth.build_auth_url("connect", user_id=str(user.id), redirect_after=redirect_after)}
-    except google_oauth.GoogleNotConfigured as exc:
-        raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, str(exc)) from exc
+    if not settings.google_configured:
+        raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are not set")
+    nonce = secrets.token_urlsafe(24)
+    _remember_nonce(response, nonce)
+    return {"url": google_oauth.build_auth_url("connect", user_id=str(user.id), redirect_after=redirect_after, nonce=nonce)}
 
 
 def _frontend(path: str, **params: str) -> str:
@@ -149,17 +167,34 @@ def _frontend(path: str, **params: str) -> str:
     return f"{settings.FRONTEND_URL.rstrip('/')}{path}{query}"
 
 
+def _redirect(url: str) -> RedirectResponse:
+    """Every answer from the callback also clears the one-time nonce cookie."""
+    response = RedirectResponse(url)
+    response.delete_cookie(OAUTH_COOKIE, path=OAUTH_COOKIE_PATH)
+    return response
+
+
 @router.get("/google/callback", dependencies=[NotInDemo])
-def google_callback(db: DB, code: str | None = None, state: str | None = None, error: str | None = None) -> RedirectResponse:
+def google_callback(request: Request, db: DB, code: str | None = None, state: str | None = None,
+                    error: str | None = None) -> RedirectResponse:
     if error or not code or not state:
-        return RedirectResponse(_frontend("/login", error=error or "google_oauth_failed"))
+        # "access_denied" is Google's answer when you press Cancel on its screen
+        return _redirect(_frontend("/login", error="access_denied" if error == "access_denied" else "google_oauth_failed"))
     try:
         payload = google_oauth.parse_state(state)
+    except TokenError as exc:
+        logger.warning("Google OAuth callback with a bad state: %s", exc)
+        return _redirect(_frontend("/login", error="google_oauth_failed"))
+    nonce = request.cookies.get(OAUTH_COOKIE) or ""
+    if not nonce or not hmac.compare_digest(nonce, str(payload.get("nonce") or "")):
+        logger.warning("Google OAuth callback from a browser that didn't start it")
+        return _redirect(_frontend("/login", error="google_oauth_failed"))
+    try:
         tokens = google_oauth.exchange_code(code)
         info = google_oauth.fetch_userinfo(tokens["access_token"])
-    except (TokenError, google_oauth.GoogleAuthError, KeyError) as exc:
+    except (google_oauth.GoogleAuthError, KeyError) as exc:
         logger.warning("Google OAuth callback failed: %s", exc)
-        return RedirectResponse(_frontend("/login", error="google_oauth_failed"))
+        return _redirect(_frontend("/login", error="google_oauth_failed"))
 
     mode = payload.get("mode")
     next_path = payload.get("next") or "/dashboard"
@@ -170,7 +205,7 @@ def google_callback(db: DB, code: str | None = None, state: str | None = None, e
     if mode == "connect":
         user = db.get(User, uuid.UUID(payload["sub"]))
         if user is None:
-            return RedirectResponse(_frontend("/login", error="session_expired"))
+            return _redirect(_frontend("/login", error="session_expired"))
         google_oauth.store_tokens(user, tokens, google_email)
         db.flush()
         try:
@@ -182,20 +217,24 @@ def google_callback(db: DB, code: str | None = None, state: str | None = None, e
         from app.worker.dispatch import enqueue
 
         enqueue("check_user_email", str(user.id), after_commit=db)
-        return RedirectResponse(_frontend(next_path, google="connected"))
+        return _redirect(_frontend(next_path, google="connected"))
 
-    # Sign in / sign up with Google
+    # Sign in / sign up with Google. Only an address Google has verified may open (or create) the account with it.
+    if not google_email or info.get("email_verified") is not True:
+        return _redirect(_frontend("/login", error="google_email_unverified"))
     user = db.scalar(select(User).where(func.lower(User.email) == google_email))
     if user is None:
         if not settings.ALLOW_REGISTRATION:
-            return RedirectResponse(_frontend("/login", error="registration_disabled"))
+            return _redirect(_frontend("/login", error="registration_disabled"))
         user = User(email=google_email, full_name=info.get("name") or google_email.split("@")[0],
                     preferences=default_preferences())
         db.add(user)
         db.flush()
+    if not user.is_active:
+        return _redirect(_frontend("/login", error="account_disabled"))
     if not user.google_email:
         user.google_email = google_email
-    response = RedirectResponse(_frontend(next_path))
+    response = _redirect(_frontend(next_path))
     _set_session(response, user)
     return response
 

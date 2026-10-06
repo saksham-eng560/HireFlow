@@ -93,6 +93,20 @@ def test_log_an_application_made_anywhere(auth_client: TestClient) -> None:
         "company_name": "X", "role_title": "Y", "job_type": "gig"}).status_code == 422
 
 
+def test_link_less_applications_from_autoapply_show_no_broken_link(auth_client: TestClient, db) -> None:
+    """Data brought over from AutoApply AI keeps the old placeholder: it's hidden exactly like HireFlow's own."""
+    user = db.query(User).filter_by(email="jane@example.com").one()
+    job = Job(company_name="NoLink Co", role_title="Data Intern", description="",
+              source_url=f"https://manual.autoapply.invalid/{user.id}/0b6c", source_platform=ATSPlatform.CUSTOM)
+    db.add(job)
+    db.flush()
+    db.add(Application(user_id=user.id, job_id=job.id, status=ApplicationStatus.APPLIED, submitted_at=datetime.now(UTC)))
+    db.commit()
+    (item,) = auth_client.get("/api/v1/applications").json()["items"]
+    assert item["job"]["company_name"] == "NoLink Co"
+    assert item["job"]["source_url"] is None and item["job"]["application_url"] is None
+
+
 def test_progress_updates_reach_every_channel(db, monkeypatch) -> None:
     sent: list[str] = []
     monkeypatch.setattr(notifier, "send_email", lambda to, subject, body, db=None, user=None: sent.append(subject) or True)

@@ -1,5 +1,5 @@
 """Demo mode (docs/HIREFLOW_PLAN.md §5.5): the bundled demo careers site, demo-only scans, nothing real sent or
-connected, "Try the demo", and the nightly reset."""
+connected, the demo sign-in (used by the e2e tests), and the nightly reset."""
 
 from __future__ import annotations
 
@@ -128,7 +128,7 @@ def test_real_world_actions_are_off(client: TestClient, demo: None) -> None:
         assert "demo" in r.json()["detail"]
 
 
-# --------------------------------------------------------------------------- "Try the demo"
+# --------------------------------------------------------------------------- the demo sign-in
 def test_try_the_demo_signs_you_in_to_the_shared_account(client: TestClient, demo: None) -> None:
     r = client.post("/api/v1/auth/demo")
     assert r.status_code == 200 and r.json()["user"]["email"] == settings.DEMO_ACCOUNT_EMAIL

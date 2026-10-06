@@ -15,6 +15,7 @@ from app.api.serializers import (
     application_summary,
     file_url,
     history_out,
+    is_manual_url,
     iso,
     resume_out,
 )
@@ -136,7 +137,7 @@ def _submit_queue(user_id: uuid.UUID, *columns):  # type: ignore[no-untyped-def]
 def _queue_item(user: User, app: Application) -> dict:
     job = app.job
     rows = review_sheet.review_rows(app, resume_url=file_url(app.tailored_resume_pdf_url))
-    apply_url = job.application_url or (None if job.source_url.startswith(MANUAL_URL_PREFIX) else job.source_url)
+    apply_url = job.application_url or (None if is_manual_url(job.source_url) else job.source_url)
     return {
         **application_summary(app),
         "form_screenshot_url": file_url(app.form_screenshot_url),

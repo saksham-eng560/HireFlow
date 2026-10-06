@@ -22,7 +22,12 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
   // Bump ICON_VERSION in src/lib/site.ts when the icons change: browsers keep favicons for a long time
   icons: {
-    icon: [{ url: `/icon.svg?v=${ICON_VERSION}`, type: "image/svg+xml" }, { url: `/favicon.ico?v=${ICON_VERSION}`, sizes: "any" }],
+    // PNG first: every browser reads it (older Safari skips SVG favicons), then SVG (sharp at any size), then ICO
+    icon: [
+      { url: `/favicon-96x96.png?v=${ICON_VERSION}`, type: "image/png", sizes: "96x96" },
+      { url: `/icon.svg?v=${ICON_VERSION}`, type: "image/svg+xml" },
+      { url: `/favicon.ico?v=${ICON_VERSION}`, sizes: "any" },
+    ],
     apple: `/apple-touch-icon.png?v=${ICON_VERSION}`,
   },
 };

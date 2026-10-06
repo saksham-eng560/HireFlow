@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     # Public demo: nothing real is sent (dry-run submissions to the demo careers site, no job-site logins, no Gmail
     # sending), a one-click demo account, and "Load sample profile" in onboarding. See docs/HIREFLOW_PLAN.md §5.5.
     DEMO_MODE: bool = False
-    # The shared account behind "Try the demo" (re-created every night) and where the bundled demo careers site
+    # The demo's shared account, for the end-to-end tests (re-created every night) and where the bundled demo careers site
     # is reached from the worker's browser (default: {PUBLIC_API_URL}{API_PREFIX}/demo-careers)
     DEMO_ACCOUNT_EMAIL: str = "demo@hireflow.app"
     DEMO_SITE_URL: str = ""
@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     # Stricter limits where abuse costs the most (per client): signing in, signing up, uploads, scans
     RATE_LIMIT_LOGIN: str = "10/minute;60/hour"
     RATE_LIMIT_REGISTER: str = "5/minute;30/hour"
-    RATE_LIMIT_DEMO: str = "20/minute;200/hour"  # "Try the demo" creates nothing; a class or office may share one IP
+    RATE_LIMIT_DEMO: str = "20/minute;200/hour"  # the demo sign-in creates nothing; a class or office may share one IP
     RATE_LIMIT_UPLOAD: str = "10/minute;60/hour"
     RATE_LIMIT_SCAN: str = "6/minute;40/hour"
 

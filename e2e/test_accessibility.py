@@ -6,7 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import BASE
+from conftest import BASE, open_demo_account
 from playwright.sync_api import Browser, Page
 
 AXE = Path(__file__).resolve().parents[1] / "frontend" / "node_modules" / "axe-core" / "axe.min.js"
@@ -31,9 +31,7 @@ def test_no_serious_accessibility_problems(browser: Browser, theme: str) -> None
     for path in PUBLIC:
         page.goto(f"{BASE}{path}")
         found[path] = _scan(page)
-    page.goto(BASE)
-    page.get_by_role("button", name="Try the demo").first.click()
-    page.wait_for_url("**/dashboard", timeout=60_000)
+    open_demo_account(page)
     assert page.evaluate("document.documentElement.classList.contains('dark')") is (theme == "dark")
     for path in DASHBOARD:
         page.goto(f"{BASE}{path}")

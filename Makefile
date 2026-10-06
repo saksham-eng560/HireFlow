@@ -2,7 +2,7 @@
 PY ?= backend/.venv/bin/python
 SHELL := /bin/bash
 
-.PHONY: start help setup setup-backend setup-frontend dev api worker beat web demo seed migrate test test-pg e2e e2e-demo metrics lint format build up down logs prod-up
+.PHONY: start help setup setup-backend setup-frontend dev api worker beat web demo seed migrate import-autoapply test test-pg e2e e2e-demo metrics lint format build up down logs prod-up
 
 start:  ## One command: install what's missing and run everything (see ./start.sh --help)
 	./start.sh
@@ -22,6 +22,10 @@ setup-frontend:  ## Install dashboard dependencies
 
 migrate:  ## Apply database migrations
 	$(PY) scripts/migrate.py
+
+import-autoapply:  ## Bring your AutoApply AI data over: make import-autoapply FROM=~/autoapply-ai
+	@test -n "$(FROM)" || { echo "Usage: make import-autoapply FROM=path/to/autoapply-ai"; exit 1; }
+	$(PY) scripts/import_autoapply.py "$(FROM)"
 
 api:  ## Run the API (reload)
 	cd backend && .venv/bin/uvicorn app.main:app --reload --port 8000

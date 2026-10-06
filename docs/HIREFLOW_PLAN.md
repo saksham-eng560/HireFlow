@@ -1,8 +1,10 @@
 # HireFlow: plan to make it resume-ready
 
 > **Status:** phases 1–5 and 7 are done. Phase 6 (a hosted public demo) was built and then removed on purpose:
-> HireFlow is meant to run on your own computer (see the [README](../README.md#quick-start)). This file is kept
-> as the record of the plan.
+> HireFlow is meant to run on your own computer (see the [README](../README.md#quick-start)). Later, the "Try the
+> demo" buttons were removed as well, since people use HireFlow for real (demo mode stays as a practice copy,
+> `./start.sh --demo`), and **Continue with Google** became the first sign-in option. This file is kept as the record
+> of the plan.
 
 This plan turns **AutoApply AI** into **HireFlow**, a polished, deployable, resume-ready project.
 **Every main feature stays**: scanning, Swipe Review, resume tailoring, cover letters, form filling,
@@ -328,7 +330,7 @@ smoke test → link it from the README and landing page.
 
 | Number | Measured |
 |---|---|
-| Tests | 437 backend (pytest) + 14 end-to-end (Playwright, through the real dashboard); 80% backend coverage |
+| Tests | 451 backend (pytest) + 19 end-to-end (Playwright, through the real dashboard); 81% backend coverage |
 | Time from sign-up to the first swipe deck | 0.9 s of server time; about 5 s through the UI (e2e) |
 | Jobs per scan and scan time (demo careers site) | 12 postings found and all 12 in the deck, in 0.3 s |
 | Form-fill success (demo careers site, Chromium, dry run) | 12 of 12 forms, 100% of fields, every required field |

@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from conftest import BASE
+from conftest import BASE, open_demo_account
 from playwright.sync_api import Page, Response, expect
 
 
@@ -17,9 +17,7 @@ def _is_decision(response: Response) -> bool:
 
 
 def test_swipe_review_on_a_phone(phone: Page) -> None:
-    phone.goto(f"{BASE}/")
-    phone.get_by_role("button", name="Try the demo").first.click()
-    phone.wait_for_url("**/dashboard", timeout=60_000)
+    open_demo_account(phone)
     phone.goto(f"{BASE}/dashboard/review")
     keep = phone.get_by_role("button", name="Keep (right arrow)")
     expect(keep).to_be_enabled(timeout=30_000)

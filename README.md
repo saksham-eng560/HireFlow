@@ -8,8 +8,8 @@
 
 <p align="center">
   <a href="https://github.com/saksham-eng560/HireFlow/actions/workflows/ci.yml"><img src="https://github.com/saksham-eng560/HireFlow/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <a href="docs/TESTING.md"><img src="https://img.shields.io/badge/tests-437%20backend%20%2B%2014%20e2e-2563EB" alt="Tests" /></a>
-  <a href="docs/TESTING.md"><img src="https://img.shields.io/badge/coverage-80%25-2563EB" alt="Coverage" /></a>
+  <a href="docs/TESTING.md"><img src="https://img.shields.io/badge/tests-451%20backend%20%2B%2019%20e2e-2563EB" alt="Tests" /></a>
+  <a href="docs/TESTING.md"><img src="https://img.shields.io/badge/coverage-81%25-2563EB" alt="Coverage" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2563EB" alt="MIT license" /></a>
 </p>
 
@@ -17,8 +17,9 @@ HireFlow finds internships, puts every one that passes your filters into a **Swi
 job you keep it tailors your resume (truthfully), writes a cover letter, fills the application form in a real
 browser and applies, then tracks the replies from Gmail and puts interviews on your calendar.
 
-It runs on your own computer: your resume, accounts and data never leave it. **Try it in two commands**
-([Quick start](#quick-start)): `./start.sh --demo`, then **Try the demo** at http://localhost:3000.
+It runs on your own computer: your resume, accounts and data never leave it. **Start it with one command**
+([Quick start](#quick-start)): `./start.sh`, then create your account at http://localhost:3000 (email, or
+**Continue with Google**).
 
 <p align="center"><img src="docs/screenshots/landing.png" alt="HireFlow's landing page: Swipe right. We apply." width="900" /></p>
 
@@ -109,7 +110,8 @@ Everything else is optional:
 | Git, Python, Node.js | **Yes** | Runs HireFlow (`./start.sh` installs the rest itself, including the browser it fills forms with) | [below](#1-get-it) |
 | Ollama (a desktop app) | No | Free AI on your own computer: better matching, tailored resumes, cover letters | [step 4](#4-free-ai-with-ollama-optional) |
 | HireFlow Chrome extension | No | Only for LinkedIn and Internshala: lets the agent use your own login there | [step 5](#5-chrome-extension-for-linkedin-and-internshala-optional) |
-| Claude API key, Google account | No | The best AI; reply and interview tracking from Gmail and Calendar | [step 6](#6-other-add-ons-optional) |
+| A Google OAuth client (free) | No | **Continue with Google** on the sign-in page; later, Gmail and Calendar tracking | [step 6](#6-sign-in-with-google-optional) |
+| Claude API key | No | The best AI for tailoring, cover letters and answers | [step 7](#7-other-add-ons-optional) |
 
 > **Copying commands on a Mac:** paste one command at a time, as shown. Don't add notes after a `#` on the
 > same line: the Mac's shell (zsh) doesn't treat them as comments.
@@ -134,33 +136,36 @@ git clone https://github.com/saksham-eng560/HireFlow.git
 cd HireFlow
 ```
 
-### 2. Try the demo (2 minutes, nothing is really sent)
+### 2. Start it
 
 ```bash
-./start.sh --demo
+./start.sh
 ```
 
 The first run takes 3–5 minutes: it installs everything (Python packages, a Chromium browser for form filling, the
 dashboard) and creates `.env` with fresh secrets. Later runs start in seconds. Your browser opens
 **http://localhost:3000**; keep the terminal open while you use it and press **Ctrl-C** there to stop.
 
-1. Press **Try the demo**: you're signed in to a sample candidate with past applications, replies and interviews.
-2. **Swipe Review**: keep a job (drag right or press →) and skip one (←). Undo with **Z**.
-3. Seconds later the kept job is in **Ready to submit**: resume tailored, form filled on the bundled demo careers
-   site with fictional companies (dry run). Open **Full details** to see the screenshot of the filled form.
-4. Look around **Overview**, **Applications**, **Interviews** and **Analytics**; try **Pause** in the header.
+### 3. Create your account and set up your agent
 
-The demo has its own database, separate from your real account, and resets every night.
+1. Click **Get started**. Create your account with your email and a password, or press **Continue with Google**
+   (it needs a one-time setup first: [step 6](#6-sign-in-with-google-optional)).
+2. Follow the onboarding: upload your resume (PDF, DOCX or TXT), pick your target roles and places, and save your
+   work-authorization answers.
+3. Run the first scan, then open **Swipe Review**: keep a job (drag right or press →), skip one (←), undo with **Z**.
+4. Each job you keep gets a tailored resume and cover letter and a filled application form, then waits in **Ready to
+   submit** with a screenshot of the form. Nothing is sent until you press **Submit application**.
 
-### 3. Use it for real
+Your data stays in `backend/data/` on your computer.
 
-```bash
-./start.sh
-```
+> **Used AutoApply AI before?** (HireFlow's old name.) Bring your account, resumes, applications and saved logins
+> over with one command, after stopping both apps:
+> `backend/.venv/bin/python scripts/import_autoapply.py ~/autoapply-ai`
+> ([details](docs/SELF_HOSTING.md#coming-from-autoapply-ai)). It never changes the AutoApply folder.
 
-Open http://localhost:3000, **Get started**, and follow the onboarding: upload your resume, pick target roles and
-places, save your work-authorization answers, then run the first scan and start swiping. (No resume handy? **Load
-sample profile** fills everything in.) Your data stays in `backend/data/` on your computer.
+> **Want to practise first?** `./start.sh --demo` starts a separate practice copy with its own database: scans find
+> fictional companies on a bundled careers site, and nothing is ever sent. Create any account there (press **Load
+> sample profile** in onboarding); it's wiped every night. Plain `./start.sh` is your real account.
 
 ### 4. Free AI with Ollama (optional)
 
@@ -244,12 +249,46 @@ press **Disconnect** on the card to remove a synced login. After `git pull`, pre
 extension's card in `chrome://extensions`. The extension is turned off in the demo. More:
 [docs/USER_GUIDE.md](docs/USER_GUIDE.md#linkedin-internshala-and-the-chrome-extension).
 
-### 6. Other add-ons (optional)
+### 6. Sign in with Google (optional)
+
+**Continue with Google** signs you in with your Google account, or creates your HireFlow account the first time.
+HireFlow runs on your computer, so it needs its own free Google "OAuth client" (a one-time setup of about five
+minutes; no payment or card). Until then, the button explains this and email sign-in works as usual.
+
+1. Open https://console.cloud.google.com/projectcreate, name the project `HireFlow` and press **Create**.
+2. Open https://console.cloud.google.com/auth/overview (make sure the **HireFlow** project is selected at the top)
+   and press **Get started**:
+   - **App name:** `HireFlow`; **User support email:** your email. **Next**.
+   - **Audience:** **External**. **Next**.
+   - **Contact information:** your email. **Next**, tick the agreement, **Create**.
+3. Open **Audience** in the left menu and press **Publish app**, then **Confirm**. (Sign-in only asks Google for your
+   name and email address, so no review by Google is needed. Or leave it in *Testing* and add your Gmail address
+   under **Test users**.)
+4. Open **Clients** in the left menu, press **Create client** and choose:
+   - **Application type:** **Web application**; **Name:** `HireFlow on my computer`.
+   - Under **Authorized redirect URIs** press **Add URI** and paste exactly:
+     `http://localhost:3000/api/v1/auth/google/callback`
+   - Press **Create**. Copy the **Client ID** and the **Client secret** shown.
+5. Open `.env` in the HireFlow folder in a text editor (on a Mac: `open -e .env`) and fill in these two lines:
+
+   ```bash
+   GOOGLE_CLIENT_ID=paste-the-client-id-here
+   GOOGLE_CLIENT_SECRET=paste-the-client-secret-here
+   ```
+
+6. Restart HireFlow (**Ctrl-C**, then `./start.sh`). **Continue with Google** now opens Google's sign-in.
+
+The same client also connects Gmail and Google Calendar later, to track replies and interviews
+([how](docs/USER_GUIDE.md#connect-gmail-and-google-calendar)). Keep the client secret in `.env` only: never share
+it or put it in git. If you've already signed up with the same email and a password, Google signs you in to that
+same account, and your password keeps working too.
+
+### 7. Other add-ons (optional)
 
 | Add-on | What it adds | How |
 |---|---|---|
 | **Claude API key** | The best AI for tailoring, cover letters and answers (paid, per use) | Create a key at https://console.anthropic.com, open `.env` in a text editor, set `ANTHROPIC_API_KEY=` to it, restart. With Ollama set up too, see [which goes first](docs/OLLAMA.md#switch-models-or-turn-it-off). |
-| **Gmail and Google Calendar** | Replies, rejections and interview invites tracked from your inbox; interviews on your calendar | Create a free Google OAuth client, put `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env`, restart, then **Settings › Integrations › Connect Google account**. Step by step: [docs/USER_GUIDE.md](docs/USER_GUIDE.md#connect-gmail-and-google-calendar). |
+| **Gmail and Google Calendar** | Replies, rejections and interview invites tracked from your inbox; interviews on your calendar | With the Google client from [step 6](#6-sign-in-with-google-optional), enable the Gmail and Calendar APIs, then **Settings › Integrations › Connect Google account**. Step by step: [docs/USER_GUIDE.md](docs/USER_GUIDE.md#connect-gmail-and-google-calendar). |
 | **Practice careers site** | A fake company with real forms, to watch the whole loop before applying for real | `./start.sh --sample`, then follow [docs/USER_GUIDE.md](docs/USER_GUIDE.md#try-the-whole-loop-on-the-sample-careers-site). |
 
 Restart means **Ctrl-C** in the HireFlow terminal, then `./start.sh` again. Keys stay in `.env` on your computer:
@@ -260,7 +299,7 @@ never share them or put them in git.
 | Command | What it does |
 |---|---|
 | `./start.sh` | Start HireFlow (your own account) at http://localhost:3000 |
-| `./start.sh --demo` | Start the demo (fictional jobs, nothing really sent) |
+| `./start.sh --demo` | Practice mode: its own database, fictional jobs, nothing really sent |
 | `./start.sh --ollama` | Start with a free local AI model (combine with `--demo`) |
 | `./start.sh --prod` | Faster pages: builds the dashboard first |
 | `./start.sh --reset` | Start with an empty database (with `--demo`: a fresh demo) |
@@ -279,6 +318,10 @@ never share them or put them in git.
 | "Can't reach the HireFlow server right now" in the browser | The API isn't running: look at the terminal for an error, or check `logs/api.log`. |
 | `Chromium install failed` | Form filling needs it. Run `backend/.venv/bin/python -m playwright install chromium` (on Linux add `--with-deps`). |
 | `Unknown option: #` or `zsh: unknown file attribute` | You pasted a note after a command. Paste only the command itself, one per line. |
+| The browser tab shows an old or different icon | Your browser kept an icon from something that ran on `localhost:3000` before. **Safari:** quit Safari, delete the folder `~/Library/Safari/Favicon Cache` (in Finder: **Go › Go to Folder…**), and open Safari again. **Chrome:** open `chrome://settings/clearBrowserData`, tick **Cached images and files**, **Clear data**, then reload with **Cmd-Shift-R**. To check quickly, open http://127.0.0.1:3000: it shows the blue "H". |
+| Google says `Error 400: redirect_uri_mismatch` | In the Google client, the redirect URI must be exactly `http://localhost:3000/api/v1/auth/google/callback` (with another `WEB_PORT`, use that port). |
+| Google says "Access blocked" or that the app is in testing | Publish the app (step 6.3), or add your Gmail address under **Audience › Test users**. |
+| "Google sign-in isn't set up on this computer yet" | Do [step 6](#6-sign-in-with-google-optional), then restart HireFlow. |
 | `Ollama isn't running` | Open the Ollama app (Mac) or run `ollama serve`. More in [docs/OLLAMA.md](docs/OLLAMA.md#troubleshooting). |
 | Test AI is slow or times out | Normal for the first answer while the model loads. If it stays slow, use a smaller model: [docs/OLLAMA.md](docs/OLLAMA.md#which-model-to-choose). |
 | No **Load unpacked** button in `chrome://extensions` | Turn on **Developer mode** (top right). |
@@ -326,7 +369,7 @@ make lint        # ruff, ESLint, TypeScript, colour contrast
 make metrics     # measure the numbers below
 ```
 
-Measured with `scripts/metrics.py`, not guessed: **437 backend tests (80% coverage) and 14 end-to-end tests**; on the demo
+Measured with `scripts/metrics.py`, not guessed: **451 backend tests (81% coverage) and 19 end-to-end tests**; on the demo
 careers site the first scan takes about 0.3 s, sign-up to the first Swipe Review deck takes under a second of
 server time (about 5 s through the UI), and 12 of 12 forms are filled in Chromium with every required field.
 CI runs all of it plus migrations, security audits and Docker builds on every push: [docs/TESTING.md](docs/TESTING.md).

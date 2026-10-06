@@ -24,18 +24,29 @@ against saved fixtures, and real-browser tests:
   caps, duplicates, the undo window, pause, dry run, truthfulness, prompt injection, output validation,
   budgets, CSRF, uploads, PII in logs, data export and deletion, consent-gated sources, back-off, and that
   the demo never reaches a real site.
+- `test_import_autoapply.py` brings a real AutoApply AI layout over (database in WAL mode with a pending change,
+  stored files, `.env`): every row and file arrives, the keys and personal settings come along, machine settings
+  don't, secrets are never printed, HireFlow's new columns and indexes are added, existing HireFlow accounts are
+  never overwritten without `--replace`, and the AutoApply folder is byte-for-byte unchanged.
+- `test_google_signin.py` runs **Continue with Google** end to end with Google faked: a new account is created,
+  an existing one with the same email is signed in, an unverified email, a cancel, a closed registration or a
+  disabled account is turned away, and Google's answer only counts in the browser that started the sign-in
+  (for Gmail connect too).
 
 **End to end** (`e2e/`, Playwright, through the built dashboard in demo mode, `scripts/e2e.sh`):
 
 - sign up, load the sample profile in onboarding, run the first scan, land on a Swipe Review deck, keep a
   job and find its form filled in Ready to submit (dry run);
-- "Try the demo" in one click;
+- the shared demo account opens with its Swipe Review deck ready;
+- **Continue with Google** on the sign-in and sign-up pages: it explains the one-time setup until Google is
+  configured, starts Google's sign-in once it is, turns Google's answers into plain messages, and is hidden in the
+  demo; no "Try the demo" button anywhere;
 - the landing page: every section, its links, the FAQ by keyboard, SEO tags, the 1200×630 social image,
   `robots.txt` and `sitemap.xml`;
 - Swipe Review on a phone: a real touch swipe keeps, the left arrow skips, nothing scrolls sideways;
 - accessibility: axe-core finds no serious or critical problems on the public pages and every dashboard
   page, in the light and the dark theme;
-- when the API can't be reached (not started yet, or stopped), sign-in and **Try the demo** say so instead of
+- when the API can't be reached (not started yet, or stopped), sign-in and creating an account say so instead of
   showing a status code, and real API errors keep their own message;
 - the smoke test (`scripts/smoke_test.py`) passes against these servers; run it against any running HireFlow
   with `python3 scripts/smoke_test.py --site http://localhost:3000 --api http://localhost:8000 --demo`.
@@ -51,8 +62,8 @@ throwaway database in demo mode with no AI keys, so anyone can reproduce it:
 | First scan of the demo careers site | 12 postings found and in the deck in about 0.3 s |
 | Forms filled on the demo careers site (Chromium, dry run) | 12 of 12, every required field filled |
 | Time per kept job (tailor, cover letter, fill) | about 2 s median |
-| Tests | 437 backend (pytest) + 14 end-to-end (Playwright) |
-| Backend coverage | 80% of `app/` (`--coverage`) |
+| Tests | 451 backend (pytest) + 19 end-to-end (Playwright) |
+| Backend coverage | 81% of `app/` (`--coverage`) |
 
 Fill rates on real Greenhouse, Lever, Ashby and Workday postings can only come from real use:
 `scripts/metrics.py --from-db "$DATABASE_URL"` reports them per ATS from your own database, along with jobs

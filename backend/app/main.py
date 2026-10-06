@@ -51,7 +51,7 @@ def _ensure_demo_account() -> None:
     try:
         with session_scope() as db:
             ensure_demo_account(db)
-    except Exception:  # never keep the API from starting; "Try the demo" seeds it on first use instead
+    except Exception:  # never keep the API from starting; the demo sign-in seeds it on first use instead
         logger.exception("Could not create the demo account at start-up")
 
 
@@ -62,7 +62,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if settings.is_sqlite:
         # Zero-setup local mode: create tables directly (PostgreSQL uses Alembic migrations).
         await asyncio.to_thread(create_all)
-    if settings.DEMO_MODE:  # "Try the demo" needs its account from the first request on
+    if settings.DEMO_MODE:  # the demo sign-in needs its account from the first request on
         await asyncio.to_thread(_ensure_demo_account)
     manager.bind_loop(asyncio.get_running_loop())
     await manager.start_subscriber()

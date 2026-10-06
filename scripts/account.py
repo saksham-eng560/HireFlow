@@ -70,6 +70,11 @@ def where(email: str | None) -> None:
             for addr, created in others:
                 print(f"  {addr}   created {created}")
             print(f"  -> to use it, start the app from {other.parents[2]}")
+    for old in sorted(ROOT.parent.glob("*/backend/data/autoapply.db")):
+        print(f"\nAutoApply AI data (this project's old name): {old}")
+        for addr, created in accounts(old):
+            print(f"  {addr}   created {created}")
+        print(f"  -> bring it over: backend/.venv/bin/python scripts/import_autoapply.py \"{old.parents[2]}\"")
     if email:
         here = any(a.lower() == email.lower() for a, _ in found)
         print(f"\n{email}: " + ("is in this database. If sign-in still fails, reset the password:\n"

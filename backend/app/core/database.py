@@ -18,7 +18,7 @@ from typing import Any
 from sqlalchemy import JSON, DateTime, Text, create_engine, event, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine import Engine
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 from sqlalchemy.types import TypeDecorator
@@ -234,6 +234,15 @@ def _add_missing_sqlite_columns() -> None:
         for (table_name, column_name), statement in _SQLITE_BACKFILLS.items():
             if (table_name, column_name) in added:
                 conn.execute(text(statement))
+        # create_all() skips tables that already exist, indexes included: add the ones newer versions brought.
+        # One that can't be built on the existing rows is logged, never a reason not to start.
+        for table in Base.metadata.sorted_tables:
+            for index in table.indexes:
+                try:
+                    with conn.begin_nested():
+                        index.create(conn, checkfirst=True)
+                except DBAPIError as exc:
+                    logger.warning("Index %s not added: %s", index.name, exc.orig)
 
 
 # Data to fill in when a column is added to an existing local database (mirrors the Alembic migrations).

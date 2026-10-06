@@ -5,18 +5,65 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ArrowUpRight } from "lucide-react";
 import { BrushHeadline, Logo, TunnelGrid } from "@/components/brand";
-import { TryDemoButton, useAuthConfig } from "@/components/demo";
+import { useAuthConfig } from "@/components/demo";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiError, post } from "@/lib/api-client";
+import { GOOGLE_SETUP_URL } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 const ERRORS: Record<string, string> = {
   google_oauth_failed: "Google sign-in failed. Please try again.",
+  access_denied: "Google sign-in was cancelled.",
+  google_email_unverified: "Google hasn't verified this account's email address, so it can't be used to sign in here.",
+  account_disabled: "This account is disabled.",
   registration_disabled: "Registration is disabled on this server.",
   session_expired: "Your session expired — sign in again.",
 };
+
+/** Google's own "G", in its colours (Google's sign-in branding asks for it unchanged). */
+function GoogleG() {
+  return (
+    <svg viewBox="0 0 48 48" className="h-5 w-5" aria-hidden>
+      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+    </svg>
+  );
+}
+
+/** "Continue with Google": signs in, or creates the account on first use. Until this computer has a Google
+ *  OAuth client in .env, it explains the one-time setup instead. */
+function GoogleButton({ next, showSetup, onShowSetup }: { next: string; showSetup: boolean; onShowSetup: () => void }) {
+  const { data: config } = useAuthConfig();
+  const className = cn(buttonVariants({ variant: "outline", size: "lg" }), "w-full gap-3 bg-background");
+  return (
+    <div className="space-y-3">
+      {config && !config.google_enabled ? (
+        <button type="button" className={className} onClick={onShowSetup} aria-expanded={showSetup} aria-controls="google-setup">
+          <GoogleG /> Continue with Google
+        </button>
+      ) : (
+        <a href={`/api/v1/auth/google/login?next=${encodeURIComponent(next)}`} className={className}>
+          <GoogleG /> Continue with Google
+        </a>
+      )}
+      {showSetup && (
+        <div id="google-setup" role="note" className="rounded-lg border border-border bg-secondary p-3 text-sm text-secondary-foreground">
+          <p className="font-semibold">Google sign-in isn&apos;t set up on this computer yet.</p>
+          <p className="mt-1">
+            It&apos;s a one-time, free setup of about five minutes: create a Google OAuth client, then put its ID and secret
+            in <code>.env</code> and restart HireFlow.{" "}
+            <a href={GOOGLE_SETUP_URL} target="_blank" rel="noreferrer" className="font-semibold text-primary hover:underline">See the steps</a>.
+            Until then, use your email below.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const router = useRouter();
@@ -27,11 +74,14 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const [fullName, setFullName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showGoogleSetup, setShowGoogleSetup] = useState(false);
   const { data: config } = useAuthConfig();
+  const google = !config?.demo_mode;  // the demo has no real-world sign-ins
 
   useEffect(() => {
     const e = params.get("error");
-    if (e) setError(ERRORS[e] || e);
+    if (e === "google_not_configured") setShowGoogleSetup(true);
+    else if (e) setError(ERRORS[e] || ERRORS.google_oauth_failed);
   }, [params]);
 
   const submit = async (e: React.FormEvent) => {
@@ -77,7 +127,17 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
             <p className="mt-2 text-sm text-muted-foreground">
               {mode === "login" ? "Sign in to your HireFlow dashboard." : "Set up your internship agent in two minutes."}
             </p>
-            <form onSubmit={submit} className="mt-8 space-y-5">
+            {google && (
+              <>
+                <div className="mt-8">
+                  <GoogleButton next={next} showSetup={showGoogleSetup} onShowSetup={() => setShowGoogleSetup((open) => !open)} />
+                </div>
+                <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground">
+                  <div className="h-px flex-1 bg-border" /> or with email <div className="h-px flex-1 bg-border" />
+                </div>
+              </>
+            )}
+            <form onSubmit={submit} className={cn("space-y-5", !google && "mt-8")}>
               {mode === "register" && (
                 <div className="space-y-2">
                   <Label htmlFor="name" className="label-caps">Full name</Label>
@@ -97,7 +157,6 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
               <Button type="submit" size="lg" className="w-full" loading={loading}>
                 {mode === "login" ? "Sign in" : "Create account"} <ArrowUpRight />
               </Button>
-              <TryDemoButton className="w-full [&>button]:w-full" label="Or try the demo, no sign-up" />
               {mode === "register" && (
                 <p className="text-center text-xs text-muted-foreground">
                   By creating an account you agree to the <Link href="/terms" className="font-semibold text-primary hover:underline">terms</Link> and{" "}
@@ -106,17 +165,6 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
                 </p>
               )}
             </form>
-            {config?.google_enabled && (
-              <>
-                <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground">
-                  <div className="h-px flex-1 bg-border" /> or <div className="h-px flex-1 bg-border" />
-                </div>
-                <a href={`/api/v1/auth/google/login?next=${encodeURIComponent(next)}`} className={cn(buttonVariants({ variant: "outline", size: "lg" }), "w-full")}>
-                  <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden><path fill="currentColor" d="M12 10.2v3.9h5.5c-.2 1.3-1.6 3.9-5.5 3.9-3.3 0-6-2.7-6-6.1s2.7-6.1 6-6.1c1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.8 3.3 14.6 2.4 12 2.4 6.7 2.4 2.4 6.7 2.4 12s4.3 9.6 9.6 9.6c5.5 0 9.2-3.9 9.2-9.4 0-.6-.1-1.1-.2-1.6H12z"/></svg>
-                  Continue with Google
-                </a>
-              </>
-            )}
             <p className="mt-6 text-sm text-muted-foreground">
               {mode === "login" ? (
                 <>No account? <Link href="/register" className="font-semibold text-foreground underline-offset-4 hover:text-primary hover:underline">Create one</Link></>

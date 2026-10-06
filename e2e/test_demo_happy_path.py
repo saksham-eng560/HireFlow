@@ -4,7 +4,7 @@
 
 A new visitor signs up, loads the sample profile in onboarding, runs the first scan, lands on a Swipe Review
 deck from the bundled demo careers site, keeps a job, and finds its form filled (dry run) in Ready to submit.
-"Try the demo" opens the shared demo account in one click.
+The shared demo account opens with its deck ready.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from __future__ import annotations
 import time
 import uuid
 
-from conftest import BASE
+from conftest import BASE, open_demo_account
 from playwright.sync_api import Page, expect
 
 
@@ -57,10 +57,8 @@ def test_sign_up_onboard_scan_swipe_and_fill(page: Page) -> None:
     assert page.request.get(f"{BASE}/api/v1/agent/status").json()["dry_run"] is True  # and nothing will be sent
 
 
-def test_try_the_demo_in_one_click(page: Page) -> None:
-    page.goto(f"{BASE}/")
-    page.get_by_role("button", name="Try the demo").first.click()
-    page.wait_for_url("**/dashboard", timeout=60_000)
+def test_the_demo_account_opens_with_its_deck(page: Page) -> None:
+    open_demo_account(page)
     expect(page.get_by_text("Demo — nothing is really sent.")).to_be_visible()
     expect(page.get_by_role("heading", name="Overview")).to_be_visible()
     page.goto(f"{BASE}/dashboard/review")

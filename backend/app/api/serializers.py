@@ -58,6 +58,13 @@ def user_out(user: User) -> dict[str, Any]:
 
 
 MANUAL_URL_PREFIX = "https://manual.hireflow.invalid/"  # applications you logged without a link
+# ...and the same placeholder from before the rename, in data brought over from AutoApply AI
+MANUAL_URL_PREFIXES = (MANUAL_URL_PREFIX, "https://manual.autoapply.invalid/")
+
+
+def is_manual_url(url: str | None) -> bool:
+    """A placeholder for an application logged without a link: there's nothing to open."""
+    return bool(url) and url.startswith(MANUAL_URL_PREFIXES)
 
 
 def job_out(job: Job, application: Application | None = None, prefs: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -74,7 +81,7 @@ def job_out(job: Job, application: Application | None = None, prefs: dict[str, A
         "salary_min": job.salary_min,
         "salary_max": job.salary_max,
         "salary_currency": job.salary_currency,
-        "source_url": None if job.source_url.startswith(MANUAL_URL_PREFIX) else job.source_url,
+        "source_url": None if is_manual_url(job.source_url) else job.source_url,
         "source_platform": enum(job.source_platform),
         "application_url": job.application_url,
         "easy_apply": job.easy_apply,

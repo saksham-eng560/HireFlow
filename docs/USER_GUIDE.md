@@ -291,11 +291,12 @@ with a notification.
 
 ## Demo mode
 
-`DEMO_MODE=true` (or `./start.sh --demo`) turns HireFlow into a safe demo, for trying it or showing it to others:
+`DEMO_MODE=true` (or `./start.sh --demo`, which also uses its own database) turns HireFlow into a safe practice
+copy, for trying the whole loop or showing it to others:
 
-- **Try the demo** on the home page and the sign-in page signs in to a shared, seeded account in one
-  click: the sample candidate, a few past applications with replies and interviews, and a full Swipe
-  Review deck. Visitors can also sign up and go through onboarding with the sample profile.
+- Create any account and go through onboarding with **Load sample profile**. There is no demo button on the site:
+  people use HireFlow for real. (A shared, pre-filled demo account exists for the end-to-end tests, which sign in to
+  it through the API.)
 - Scans read only the **bundled demo careers site** (`/api/v1/demo-careers`): twelve internships at
   fictional companies with real application forms. Applications to any other site are held for review.
 - **Dry run** is on: forms are filled and screenshotted, never submitted. Nothing reaches a real
@@ -331,24 +332,57 @@ python3 scripts/demo_site.py --host 0.0.0.0     # or on its own (no dependencies
    answers and click **Review & approve** yourself.
 7. Open http://localhost:8765/submissions to see exactly what was submitted, including your resume PDF.
 
+## Sign in with Google
+
+**Continue with Google** on the sign-in and sign-up pages signs you in with your Google account, or creates your
+HireFlow account the first time (you then go through onboarding as usual). HireFlow runs on your own computer, so
+it needs its own free Google OAuth client. Until one is set, the button explains this and email sign-in works.
+
+1. Open https://console.cloud.google.com/projectcreate, name the project `HireFlow` and press **Create**.
+2. Open https://console.cloud.google.com/auth/overview (with the **HireFlow** project selected at the top) and
+   press **Get started**: **App name** `HireFlow` and your support email, **Audience** **External**, your contact
+   email, tick the agreement, **Create**.
+3. **Audience** (left menu): press **Publish app**, then **Confirm**. Sign-in only asks Google for your name and
+   email address, which Google allows without a review. (Or leave it in *Testing* and add each Gmail address that
+   may sign in under **Test users**.)
+4. **Clients** (left menu): **Create client**, **Application type** **Web application**, any name. Under
+   **Authorized redirect URIs** add exactly:
+   ```
+   {FRONTEND_URL}/api/v1/auth/google/callback      e.g. http://localhost:3000/api/v1/auth/google/callback
+   ```
+   Press **Create**, then copy the **Client ID** and **Client secret**.
+5. Put them into `.env` with a text editor (`GOOGLE_CLIENT_ID=` and `GOOGLE_CLIENT_SECRET=`), and restart.
+
+How it behaves:
+
+- **Same email, same account.** If you signed up with an email and password first, Google signs you in to that
+  account, and the password keeps working. Only an email address Google has verified is accepted.
+- **Safe round trip.** The browser that pressed the button keeps a one-time code in a cookie; Google's answer is
+  accepted only in that same browser, within 15 minutes.
+- **Only your name and email.** Sign-in asks Google for nothing else. Gmail and Calendar are a separate, explicit
+  step (below), with the same client.
+- **Off in the demo**, like every other real-world sign-in. `ALLOW_REGISTRATION=false` also stops Google from
+  creating new accounts; existing ones still sign in.
+
 ## Connect Gmail and Google Calendar
 
-1. In the [Google Cloud console](https://console.cloud.google.com/), create a project and enable the
-   **Gmail API** and the **Google Calendar API**.
-2. **OAuth consent screen**: choose External, add your e-mail as a test user, and add the scopes
-   `gmail.readonly`, `gmail.modify`, `gmail.labels`, `calendar.events` and `calendar.readonly`.
+1. In the [Google Cloud console](https://console.cloud.google.com/), use the project from
+   [Sign in with Google](#sign-in-with-google) (or create one) and enable the **Gmail API** and the
+   **Google Calendar API**.
+2. **OAuth consent screen** (Google Auth Platform): choose External, add your e-mail as a test user, and add the
+   scopes `gmail.readonly`, `gmail.modify`, `gmail.labels`, `calendar.events` and `calendar.readonly`.
    > While the app's publishing status is **Testing**, Google expires refresh tokens after 7 days and
    > you'll have to reconnect weekly. For personal use you can set the status to **In production**
    > without verification. You'll see an "unverified app" warning when connecting, and tokens stop
    > expiring.
-3. **Credentials → Create credentials → OAuth client ID**: choose type **Web application**, and add
-   this authorized redirect URI:
+3. **Clients → Create client** (skip if you made one for sign-in: it's the same client): choose type
+   **Web application**, and add this authorized redirect URI:
    ```
    {FRONTEND_URL}/api/v1/auth/google/callback      e.g. http://localhost:3000/api/v1/auth/google/callback
    ```
 4. Paste the client ID and client secret into their places in your `.env` file. Keep the secret
-   private and never commit it. Restart (`docker compose up -d`), then go to
-   **Settings → Google → Connect**.
+   private and never commit it. Restart HireFlow (**Ctrl-C** and `./start.sh`, or `docker compose up -d`),
+   then go to **Settings › Integrations › Connect Google account**.
 
 **Optional: real-time Gmail push** (otherwise the inbox is polled every `EMAIL_POLL_MINUTES`). This
 needs a public HTTPS URL.

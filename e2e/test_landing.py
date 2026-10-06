@@ -32,10 +32,10 @@ def test_every_section_is_there_and_the_buttons_work(page: Page) -> None:
     question.focus()
     page.keyboard.press("Enter")
     expect(page.get_by_text("waits 10 minutes in", exact=False)).to_be_visible()
-    # In the demo, "Try the demo" signs straight in to the shared account
-    page.get_by_role("button", name="Try the demo").first.click()
-    page.wait_for_url("**/dashboard", timeout=30_000)
-    expect(page.get_by_text("Demo — nothing is really sent.")).to_be_visible()
+    # People sign up and use it for real: no demo shortcut, even when the server runs the demo
+    expect(page.get_by_role("button", name="Try the demo")).to_have_count(0)
+    page.get_by_role("link", name="Get started").first.click()
+    page.wait_for_url("**/register")
 
 
 def test_it_fits_a_phone(phone: Page) -> None:
