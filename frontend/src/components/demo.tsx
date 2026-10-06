@@ -18,12 +18,7 @@ export function useAuthConfig() {
   return useSWR<AuthConfig>("/auth/config", fetcher, { revalidateOnFocus: false });
 }
 
-/** Set on the public demo's dashboard build: show "Try the demo" before (or without) the API's answer. */
-const DEMO_SITE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
-
-/** "Try the demo": one click signs in to the shared demo account (shown when the server runs the demo). On the
- * public demo's build it shows straight away, so the main button never vanishes while the API wakes up or is down:
- * clicking it then says the server can't be reached. */
+/** "Try the demo": one click signs in to the shared demo account (only shown when the server runs the demo). */
 export function TryDemoButton({ className, size = "lg", variant = "outline", label = "Try the demo" }: {
   className?: string;
   size?: ButtonProps["size"];
@@ -34,7 +29,7 @@ export function TryDemoButton({ className, size = "lg", variant = "outline", lab
   const { data: config } = useAuthConfig();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  if (!(config ? config.demo_mode : DEMO_SITE)) return null;
+  if (!config?.demo_mode) return null;
   const start = async () => {
     setBusy(true);
     setError(null);

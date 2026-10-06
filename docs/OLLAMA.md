@@ -8,7 +8,7 @@ makes the writing and matching much better, and Claude (an `ANTHROPIC_API_KEY`) 
 - [The quick way (Mac or Linux)](#the-quick-way)
 - [Which model to choose](#which-model-to-choose)
 - [Windows](#windows) · [Docker](#with-docker) · [Your own server](#on-your-own-server) ·
-  [Ollama Cloud](#ollama-cloud-big-models-no-download) · [The deployed demo](#the-deployed-demo)
+  [Ollama Cloud](#ollama-cloud-big-models-no-download)
 - [Check that it works](#check-that-it-works) · [What to expect](#what-to-expect) ·
   [Switch models or turn it off](#switch-models-or-turn-it-off) · [Troubleshooting](#troubleshooting) ·
   [All settings](#all-settings)
@@ -127,15 +127,6 @@ The free plan runs one request at a time, which is what `OLLAMA_CONCURRENCY=1` (
 You can also use cloud models through a local Ollama: run `ollama signin`, then pick a model whose name ends in
 `-cloud` (no `OLLAMA_API_KEY` needed in that case).
 
-## The deployed demo
-
-The [free deployment](DEPLOY.md#free-deployment-vercel--hugging-face)'s API runs on a Hugging Face Space with
-no GPU, so a local model there would take minutes per answer. Use Ollama Cloud instead: on the Space's page,
-**Settings → Variables and secrets**, add the variables `LLM_PROVIDER=ollama`, `OLLAMA_BASE_URL=https://ollama.com`,
-`OLLAMA_MODEL=gpt-oss:120b` and the **secret** `OLLAMA_API_KEY`. The Space restarts with them. Each visitor's
-AI use is capped per day (`DEMO_LLM_CALLS_PER_USER_PER_DAY`, 40 by default), and the demo refuses **Download
-model**: the model is chosen by whoever deploys it.
-
 ## Check that it works
 
 **Settings › Integrations › AI model** shows:
@@ -192,7 +183,7 @@ Restart HireFlow after editing `.env`.
 
 ## All settings
 
-Set in `.env` (or the Space's variables for the deployed demo). Only `OLLAMA_MODEL` (or `LLM_PROVIDER=ollama`) is
+Set in `.env`. Only `OLLAMA_MODEL` (or `LLM_PROVIDER=ollama`) is
 needed; the rest have sensible defaults.
 
 | Setting | Default | What it does |

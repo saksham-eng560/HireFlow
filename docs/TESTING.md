@@ -35,10 +35,10 @@ against saved fixtures, and real-browser tests:
 - Swipe Review on a phone: a real touch swipe keeps, the left arrow skips, nothing scrolls sideways;
 - accessibility: axe-core finds no serious or critical problems on the public pages and every dashboard
   page, in the light and the dark theme;
-- when the API can't be reached (no backend yet, asleep, down), sign-in and **Try the demo** say so instead of
+- when the API can't be reached (not started yet, or stopped), sign-in and **Try the demo** say so instead of
   showing a status code, and real API errors keep their own message;
-- the deployment smoke test (`scripts/smoke_test.py`, see [DEPLOY.md](DEPLOY.md#7-smoke-test-and-uptime))
-  passes against these servers, so it's known to work before it's pointed at a real deployment.
+- the smoke test (`scripts/smoke_test.py`) passes against these servers; run it against any running HireFlow
+  with `python3 scripts/smoke_test.py --site http://localhost:3000 --api http://localhost:8000 --demo`.
 
 ## The numbers
 
@@ -51,7 +51,7 @@ throwaway database in demo mode with no AI keys, so anyone can reproduce it:
 | First scan of the demo careers site | 12 postings found and in the deck in about 0.3 s |
 | Forms filled on the demo careers site (Chromium, dry run) | 12 of 12, every required field filled |
 | Time per kept job (tailor, cover letter, fill) | about 2 s median |
-| Tests | 439 backend (pytest) + 15 end-to-end (Playwright) |
+| Tests | 437 backend (pytest) + 14 end-to-end (Playwright) |
 | Backend coverage | 80% of `app/` (`--coverage`) |
 
 Fill rates on real Greenhouse, Lever, Ashby and Workday postings can only come from real use:
@@ -67,8 +67,5 @@ found per scan and scan time.
 - **Dashboard**: ESLint, `tsc --noEmit`, a WCAG AA colour-contrast check of the theme tokens, `next build`.
 - **Security**: `pip-audit`, `npm audit --omit=dev` and gitleaks over the code and its history.
 - **End to end**: the Playwright tests above, against a fresh demo-mode API and the production build.
-- **Smoke test** ([`smoke.yml`](../.github/workflows/smoke.yml)): the live demo, daily and after each deploy.
-- **Deploy** ([`deploy-space.yml`](../.github/workflows/deploy-space.yml)): the API to its Hugging Face Space after CI
-  passes on `main`, then the smoke test against it.
 - **Extension**: manifest and script validation, packaging.
 - **Docker**: both images build, and the backend image launches Chromium.

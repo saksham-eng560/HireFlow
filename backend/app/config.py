@@ -184,7 +184,7 @@ class Settings(BaseSettings):
     # ---- Monitoring ----
     SENTRY_DSN: str | None = None
     SENTRY_TRACES_SAMPLE_RATE: float = 0.1
-    SENTRY_RELEASE: str | None = None  # defaults to the deployed commit on Render (RENDER_GIT_COMMIT)
+    SENTRY_RELEASE: str | None = None  # e.g. the deployed git commit
 
     # ---- Paths ----
     PROMPTS_DIR: str = Field(default_factory=lambda: str(REPO_ROOT / "prompts"))

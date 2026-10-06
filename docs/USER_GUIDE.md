@@ -291,7 +291,7 @@ with a notification.
 
 ## Demo mode
 
-`DEMO_MODE=true` (or `./start.sh --demo`) turns HireFlow into a safe public demo:
+`DEMO_MODE=true` (or `./start.sh --demo`) turns HireFlow into a safe demo, for trying it or showing it to others:
 
 - **Try the demo** on the home page and the sign-in page signs in to a shared, seeded account in one
   click: the sample candidate, a few past applications with replies and interviews, and a full Swipe

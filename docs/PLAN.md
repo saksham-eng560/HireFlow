@@ -5,7 +5,7 @@
 > **Status.** This is the original design the code was built from; code comments cite its sections as
 > "PLAN.md §N". Where the build differs, the code and these docs are current:
 > [ARCHITECTURE.md](ARCHITECTURE.md), [HIREFLOW_PLAN.md](HIREFLOW_PLAN.md) (the resume-ready plan: rename,
-> theme, onboarding, guardrails, polish, deployment) and [DEPLOY.md](DEPLOY.md). The main differences:
+> theme, onboarding, guardrails, polish). The main differences:
 >
 > - **Review**: jobs go through a Swipe Review deck; keeping one is the approval, with a 10-minute undo
 >   window before an automatic send, server-side daily and per-company caps, and a dry-run mode.
@@ -13,9 +13,8 @@
 >   OAuth is only for Gmail and Calendar.
 > - **AI**: Anthropic, OpenAI or a local Ollama model in a configurable order, schema-validated replies,
 >   per-user daily budgets, and a heuristic fallback for every step (see [AI_MODELS.md](AI_MODELS.md)).
-> - **PDFs**: ReportLab. **Deployment**: one-command local mode, Docker Compose, or the public demo on
->   Vercel + Render + Neon + Upstash + R2 ([DEPLOY.md](DEPLOY.md)); ECS remains an option
->   ([SELF_HOSTING.md](SELF_HOSTING.md#deployment)).
+> - **PDFs**: ReportLab. **Running it**: on your own computer with one command (`./start.sh`), or with Docker
+>   Compose on your own server ([SELF_HOSTING.md](SELF_HOSTING.md)); no hosted service.
 > - **Browsers**: Playwright sessions in the worker, isolated per application, rather than one container
 >   per session.
 

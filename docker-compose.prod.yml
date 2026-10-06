@@ -4,7 +4,6 @@
 #   3. docker compose -f docker-compose.prod.yml up -d --build
 # Free AI on this server: WITH_OLLAMA=1 scripts/server-setup.sh, or COMPOSE_PROFILES=ollama,
 # LLM_PROVIDER=ollama, OLLAMA_BASE_URL=http://ollama:11434 and OLLAMA_MODEL=qwen3.5:4b in .env (README).
-# For AWS ECS/Fargate + Vercel see .github/workflows/deploy-*.yml and README.md.
 name: hireflow-prod
 
 x-backend: &backend
