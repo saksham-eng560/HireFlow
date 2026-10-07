@@ -342,7 +342,9 @@ it needs its own free Google OAuth client. Until one is set, the button explains
 2. Open https://console.cloud.google.com/auth/overview (with the **HireFlow** project selected at the top) and
    press **Get started**: **App name** `HireFlow` and your support email, **Audience** **External**, your contact
    email, tick the agreement, **Create**.
-3. **Audience** (left menu): press **Publish app**, then **Confirm**. Sign-in only asks Google for your name and
+3. **Branding** (left menu): check that the app name, support email and developer contact are filled in, leave
+   the rest empty (no logo: a logo makes Google review the app first) and press **Save**. Then **Audience** (left
+   menu): press **Publish app**, then **Confirm**. Sign-in only asks Google for your name and
    email address, which Google allows without a review. (Or leave it in *Testing* and add each Gmail address that
    may sign in under **Test users**.)
 4. **Clients** (left menu): **Create client**, **Application type** **Web application**, any name. Under

@@ -442,3 +442,25 @@ def test_credentials_in_the_ollama_url_are_never_shown(monkeypatch: pytest.Monke
         "Client error '404' for url 'http://qauser:qapass@127.0.0.1:11999/api/pull'", request=None, response=None))])
     assert not result["ok"] and "127.0.0.1:11999" in result["error"]
     assert "qapass" not in shown and "qauser" not in shown
+
+
+@pytest.mark.parametrize("error", [
+    # Ollama 0.40 on a Mac when a second copy of the model doesn't fit next to one an `ollama run` left loaded
+    "Ollama error 500: llama-server startup failed after projector CPU offload retry: llama-server process has terminated: "
+    "exit status 1: error: failed to create library error: failed to initialize the Metal library error: failed to "
+    "allocate context llama_init_from_model: failed to initialize the context: failed to initia",
+    "Ollama error 500: model requires more system memory (9.1 GiB) than is available (6.2 GiB)",
+    "Ollama error 500: CUDA error: out of memory",
+])
+def test_out_of_memory_errors_get_the_memory_hint_not_the_context_one(error: str) -> None:
+    from app.services.ai_setup import hint_for
+
+    hint = hint_for(error)
+    assert "ollama ps" in hint and "ollama stop" in hint
+    assert "Raise OLLAMA_NUM_CTX" not in hint  # more context needs more memory: the opposite of the fix
+
+
+def test_a_prompt_too_long_for_the_context_still_says_raise_it() -> None:
+    from app.services.ai_setup import hint_for
+
+    assert "Raise OLLAMA_NUM_CTX" in hint_for("The prompt is longer than the model's context (input too long)")
