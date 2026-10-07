@@ -129,6 +129,11 @@ def llm_section(llm: LLMClient | None = None) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- connection test
+# How Ollama says the model didn't fit in (GPU / Metal / system) memory
+MEMORY_ERRORS = ("failed to allocate", "unable to allocate", "out of memory", "insufficient memory",
+                 "requires more system memory", "failed to initialize the metal", "cudamalloc", "llama-server startup failed")
+
+
 def hint_for(message: str) -> str:
     low = message.lower()
     if "isn't downloaded" in low or "ollama pull" in low:
@@ -138,6 +143,10 @@ def hint_for(message: str) -> str:
                 "server) and check OLLAMA_BASE_URL in .env.")
     if any(word in low for word in ("api key", "api_key", "unauthorized", "authentication", "401", "signin")):
         return "Check the key in .env (ANTHROPIC_API_KEY, OPENAI_API_KEY or OLLAMA_API_KEY), then restart the app."
+    if any(word in low for word in MEMORY_ERRORS):  # before "context": "failed to allocate context" is memory
+        return ("Ollama couldn't fit the model in memory. Another model may still be loaded (an `ollama run` in a terminal "
+                "keeps it for a few minutes): run `ollama ps`, then `ollama stop <model>`, or quit and reopen the Ollama "
+                "app. Still failing? Set OLLAMA_NUM_CTX=4096 in .env or pick a smaller model, then restart.")
     if "num_ctx" in low or "context" in low:
         return "Raise OLLAMA_NUM_CTX in .env (for example 16384), then restart."
     if "took longer" in low or "timed out" in low or "timeout" in low or "busy" in low:

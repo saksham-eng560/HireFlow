@@ -175,6 +175,7 @@ Restart HireFlow after editing `.env`.
 | `Ollama isn't running at http://localhost:11434` | Open the Ollama app (Mac), or run `ollama serve` (Linux: `sudo systemctl start ollama`). Check with `curl http://localhost:11434/api/version`. |
 | Settings says the model isn't downloaded | Press **Download model**, or run `ollama pull <model>`. The name must match `OLLAMA_MODEL` exactly, tag included (`qwen3.5:4b`). |
 | Answers time out or take very long | Use a smaller model, close other heavy apps, or raise `OLLAMA_TIMEOUT_SECONDS` (default 600). Keep `OLLAMA_CONCURRENCY=1` on a CPU. |
+| Test AI says `failed to allocate context` or `failed to initialize the Metal library` | The model didn't fit in memory, usually because another copy is still loaded (an `ollama run` in a terminal keeps it for a few minutes). Run `ollama ps`, then `ollama stop <model>` (or quit and reopen the Ollama app), and press **Test AI** again. Still failing: `OLLAMA_NUM_CTX=4096` in `.env`, or a smaller model. |
 | The computer slows down or the model crashes | It doesn't fit in memory: switch to a smaller model (see [the table](#which-model-to-choose)). |
 | In Docker, the app can't reach Ollama | With the app on your computer: keep `OLLAMA_BASE_URL` empty or `http://localhost:11434`. With the `ollama` container: `COMPOSE_PROFILES=ollama` and `OLLAMA_BASE_URL=http://ollama:11434`. |
 | Ollama Cloud: `401` or "unauthorized" | `OLLAMA_API_KEY` is missing or wrong in `.env`, or `OLLAMA_BASE_URL` isn't `https://ollama.com`. |
