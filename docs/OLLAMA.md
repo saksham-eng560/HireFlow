@@ -55,7 +55,7 @@ app. Set it as `OLLAMA_MODEL` in `.env` and run `./start.sh --ollama` again to d
 |---|---|---|---|
 | `llama3.2:3b` | ~2 GB | 8 GB RAM; fastest, weakest on long resumes | seconds / under 1 min |
 | `qwen3.5:4b` (default) | ~3.4 GB | 8–16 GB RAM; good scores and answers, plain writing | seconds / 1–2 min |
-| `qwen3:4b` / `qwen3:8b` | ~2.5 / ~5.2 GB | proven alternatives | similar to their sizes |
+| `qwen3:4b` / `qwen3:8b` | ~2.5 / ~5.2 GB | proven, text-only alternatives: use them if a `qwen3.5` model won't load on your Mac | similar to their sizes |
 | `qwen3.5:9b` | ~6.6 GB | 16 GB RAM or more; better writing and reasoning | 10–30 s / 2–4 min |
 
 Bigger models are slower, and a model that doesn't fit in memory is very slow. Times are rough estimates.
@@ -175,7 +175,7 @@ Restart HireFlow after editing `.env`.
 | `Ollama isn't running at http://localhost:11434` | Open the Ollama app (Mac), or run `ollama serve` (Linux: `sudo systemctl start ollama`). Check with `curl http://localhost:11434/api/version`. |
 | Settings says the model isn't downloaded | Press **Download model**, or run `ollama pull <model>`. The name must match `OLLAMA_MODEL` exactly, tag included (`qwen3.5:4b`). |
 | Answers time out or take very long | Use a smaller model, close other heavy apps, or raise `OLLAMA_TIMEOUT_SECONDS` (default 600). Keep `OLLAMA_CONCURRENCY=1` on a CPU. |
-| Test AI says `failed to allocate context` or `failed to initialize the Metal library` | The model didn't fit in memory, usually because another copy is still loaded (an `ollama run` in a terminal keeps it for a few minutes). Run `ollama ps`, then `ollama stop <model>` (or quit and reopen the Ollama app), and press **Test AI** again. Still failing: `OLLAMA_NUM_CTX=4096` in `.env`, or a smaller model. |
+| Test AI says `failed to allocate context` or `failed to initialize the Metal library` | Quit Ollama from the menu bar and open it again, then press **Test AI** again (`ollama ps` shows the loaded models, `ollama stop <model>` unloads one: an `ollama run` in a terminal keeps its model for a few minutes). Still failing: some Ollama versions can't load the image part of `qwen3.5` models on some Macs, so switch to a text-only model, `OLLAMA_MODEL=qwen3:8b` (or `qwen3:4b` with 8 GB of RAM), and run `./start.sh --ollama`. |
 | The computer slows down or the model crashes | It doesn't fit in memory: switch to a smaller model (see [the table](#which-model-to-choose)). |
 | In Docker, the app can't reach Ollama | With the app on your computer: keep `OLLAMA_BASE_URL` empty or `http://localhost:11434`. With the `ollama` container: `COMPOSE_PROFILES=ollama` and `OLLAMA_BASE_URL=http://ollama:11434`. |
 | Ollama Cloud: `401` or "unauthorized" | `OLLAMA_API_KEY` is missing or wrong in `.env`, or `OLLAMA_BASE_URL` isn't `https://ollama.com`. |
