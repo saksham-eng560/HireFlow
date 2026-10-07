@@ -49,6 +49,7 @@ Everything runs on your computer: your resume, accounts and data never leave it.
 | **Tailors your resume** | Reorders and rewrites your resume for each job, checked line by line so nothing is invented, and writes a cover letter for the actual role. |
 | **Fills the forms** | A real browser fills Greenhouse, Lever, Workday, LinkedIn Easy Apply and generic forms, and keeps a screenshot of each. Eligibility questions are never guessed. |
 | **Tracks the replies** | Gmail replies are sorted into acknowledged, interview, assessment, rejection and offer, and each application's status follows. Interviews go on your calendar with prep notes. |
+| **Uses your own logins** | An optional [Chrome extension](#chrome-extension-for-linkedin-and-internshala) hands HireFlow your LinkedIn and Internshala sessions, so it can apply there with your account. |
 | **Shows what works** | Response, interview and offer rates, time to first reply, and the keywords that get callbacks. |
 
 It works on a phone (swipe gestures, installable as an app), in light and dark mode, and with a keyboard or a
@@ -293,35 +294,63 @@ password keeps working too. Keep the client secret in `.env` only: never share i
 
 ### Chrome extension for LinkedIn and Internshala
 
-Only needed for **LinkedIn** and **Internshala**, which accept applications only from your own logged-in account.
-The extension copies your login there to your own HireFlow, and nowhere else. These sites don't allow automation
-in their terms and can restrict accounts they think are automated, so they stay off until you turn them on. Use
-them at your own risk.
+**HireFlow — Session Sync** is a small Chrome extension in the [`extension/`](extension) folder of this repo. It's
+only needed for **LinkedIn** and **Internshala**: they accept applications only from your own logged-in account,
+so the extension hands your login there to your own HireFlow. Everything else (Greenhouse, Lever, Ashby, Workday,
+careers pages, practice mode) works without it.
 
-**1. Turn the site on.** In HireFlow, open **Settings › Job sources**, scroll to **Sites that don't allow
+| | |
+|---|---|
+| **What it does** | Copies your LinkedIn and Internshala sessions (the login cookies) to your HireFlow, so the agent can search and apply with your account. It re-syncs every 12 hours while Chrome is open, and whenever the site renews your login. |
+| **What it reads** | LinkedIn: only the `li_at` login cookie, and your public profile link from the "Me" menu. Internshala: its login cookies, only after you press **Sync Internshala session** once. It never reads your messages, other tabs or other sites. |
+| **Where it sends them** | Only to the dashboard address you type in (`http://localhost:3000`), with a token that can do nothing except sync these two logins. HireFlow stores them encrypted and never shows them. |
+| **Permissions Chrome shows** | Cookies and storage (to read and remember the two logins), alarms (the 12-hour re-sync), linkedin.com and internshala.com, and the one dashboard address you allow. |
+
+LinkedIn and Internshala don't allow automation in their terms and can restrict accounts they think are
+automated, so in HireFlow they stay **off until you turn them on**. Use them at your own risk.
+
+**1. Turn the site on in HireFlow.** Open **Settings › Job sources**, scroll to **Sites that don't allow
 automation**, tick *I understand the risk…* next to LinkedIn and/or Internshala, and press **Turn on**.
 
-**2. Add the extension to Chrome.** (Edge and Brave work the same way; Safari and Firefox don't.)
+**2. Add the extension to Chrome.** It isn't on the Chrome Web Store; you load it from the HireFlow folder. Edge,
+Brave and other Chromium browsers work the same way; Safari and Firefox don't.
 
 1. Open a new tab and go to `chrome://extensions`.
 2. Turn on **Developer mode** (the switch at the top right).
-3. Press **Load unpacked** and choose the **`extension`** folder inside the HireFlow folder. On a Mac, press
-   **Cmd-Shift-G** in that window, type `~/HireFlow/extension` and press **Select**.
-4. Click the puzzle-piece icon in Chrome's toolbar and pin **HireFlow**, so its blue "H" stays visible.
+3. Press **Load unpacked** (top left) and choose the **`extension`** folder inside the HireFlow folder. On a Mac,
+   press **Cmd-Shift-G** in that window, type `~/HireFlow/extension` and press **Select**.
+4. **HireFlow — Session Sync** appears in the list. Click the puzzle-piece icon in Chrome's toolbar and pin it,
+   so its blue "H" stays visible.
 
-**3. Connect it to HireFlow** (while HireFlow is running):
+Keep the HireFlow folder where it is: Chrome loads the extension from it.
+
+**3. Connect it to HireFlow** (HireFlow must be running):
 
 1. In HireFlow, open **Settings › Integrations**. On the **LinkedIn — Chrome extension** card, press **Generate
-   extension token** and copy the token.
-2. Click the blue "H" in Chrome's toolbar. Enter **Dashboard URL** `http://localhost:3000` and paste the token.
-3. Press **Save settings**, then **Allow** when Chrome asks.
+   extension token**, then copy the token with the copy button.
+2. Click the blue "H" in Chrome's toolbar and fill in **Dashboard URL** `http://localhost:3000` and **Extension
+   token** (paste it).
+3. Press **Save settings**, then **Allow** when Chrome asks to let the extension reach `localhost:3000`.
 
-**4. Sync your login.** Log in at https://www.linkedin.com (or https://internshala.com) in the same Chrome, open
-the extension and press **Sync LinkedIn session** (or **Sync Internshala session**). **Settings › Integrations**
-now shows **Session synced**.
+**4. Sync your logins.**
 
-The extension re-syncs by itself every 12 hours while Chrome is open. After a `git pull`, press the reload icon on
-its card in `chrome://extensions`. More: [user guide](docs/USER_GUIDE.md#linkedin-internshala-and-the-chrome-extension).
+- **LinkedIn:** log in at https://www.linkedin.com in the same Chrome, open the extension and press **Sync
+  LinkedIn session**.
+- **Internshala:** log in at https://internshala.com, open the extension and press **Sync Internshala session**.
+  To let the agent fill and send Internshala applications too, turn on **Let the agent apply on Internshala** on
+  the **Internshala — apply bot** card in **Settings › Integrations** (read the warning first).
+
+The popup and **Settings › Integrations** now show **Session synced** with the time of the last sync.
+
+**Updating, and removing it**
+
+- **After `git pull`:** open `chrome://extensions` and press the reload icon on the extension's card.
+- **Token:** it works for 180 days. When the extension says "Token rejected", generate a new one (step 3).
+- **Disconnect:** press **Disconnect** on the card in **Settings › Integrations** to delete a synced login from
+  HireFlow. To remove the extension itself, press **Remove** on its card in `chrome://extensions`.
+- In practice mode (`./start.sh --demo`) the extension is turned off.
+
+More detail, including how the Internshala bot fills forms: [user guide](docs/USER_GUIDE.md#linkedin-internshala-and-the-chrome-extension).
 
 ### Gmail and Google Calendar
 
